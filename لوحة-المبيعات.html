@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة مبيعات — بنك الرياض</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green-950: #042818;
+      --green-900: #0b5c3b;
+      --green-800: #0f6f48;
+      --green-100: #e8f5ef;
+      --sand: #f3eee4;
+      --sand-deep: #e7dfd0;
+      --ink: #102018;
+      --ink-soft: #3d5246;
+      --line: rgba(11, 92, 59, 0.14);
+      --white: #fffcf7;
+      --danger: #9b2c2c;
+      --stage-04: #1a7a4c;
+      --stage-77: #b8860b;
+      --stage-118: #0f5c8c;
+      --shadow: 0 18px 50px rgba(4, 40, 24, 0.12);
+      --font-display: 'Tajawal', sans-serif;
+      --font-body: 'IBM Plex Sans Arabic', sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background: var(--sand);
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(21,122,82,.18), transparent 35%),
+        linear-gradient(135deg, rgba(11,92,59,.04) 25%, transparent 25%);
+      background-size: auto, 24px 24px;
+    }
+    button, input { font: inherit; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,252,247,.82);
+      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .brand { display: flex; align-items: center; gap: .9rem; }
+    .brand-mark {
+      width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
+      background: linear-gradient(145deg, var(--green-800), var(--green-950));
+      color: #fff; font-family: var(--font-display); font-weight: 800; font-size: .78rem;
+      box-shadow: 0 10px 24px rgba(11,92,59,.28);
+    }
+    .brand h1 {
+      margin: 0; font-family: var(--font-display); font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+      font-weight: 800; color: var(--green-900); line-height: 1.15;
+    }
+    .brand p { margin: .15rem 0 0; color: var(--ink-soft); font-size: .92rem; }
+    .btn-primary, .btn-ghost, .close-btn, .icon-btn, .move-btn {
+      border: none; border-radius: 999px; cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--green-800), var(--green-950));
+      color: #fff; font-weight: 600; padding: .75rem 1.35rem;
+      box-shadow: 0 10px 24px rgba(11,92,59,.25);
+    }
+    .btn-ghost {
+      background: transparent; color: var(--ink-soft); border: 1px solid var(--line);
+      padding: .75rem 1.35rem;
+    }
+    .main { padding: 1.5rem clamp(1rem, 4vw, 2.5rem) 3rem; display: grid; gap: 1.5rem; }
+    .hero {
+      padding: clamp(1.4rem, 3vw, 2.2rem); border-radius: 24px; color: #fff;
+      background: linear-gradient(160deg, #0b5c3b 0%, #157a52 45%, #0a3d28 100%);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 .5rem; font-size: .85rem; opacity: .85; }
+    .hero h2 {
+      margin: 0; font-family: var(--font-display); font-size: clamp(1.55rem, 3.4vw, 2.35rem);
+      font-weight: 800; line-height: 1.25;
+    }
+    .hero-sub { margin: .75rem 0 0; line-height: 1.7; opacity: .92; max-width: 36rem; }
+    .hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .85rem; margin-top: 1.4rem; }
+    .stat {
+      padding: 1rem 1.1rem; border-radius: 14px;
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+    }
+    .stat span { display: block; font-size: .82rem; opacity: .85; margin-bottom: .35rem; }
+    .stat strong { font-family: var(--font-display); font-size: clamp(1.1rem, 2vw, 1.45rem); }
+    .search {
+      width: 100%; border: 1px solid var(--line); background: var(--white);
+      border-radius: 14px; padding: .95rem 1.1rem; outline: none;
+    }
+    .search:focus { border-color: var(--green-900); box-shadow: 0 0 0 4px rgba(21,122,82,.12); }
+    .pipeline { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1rem; align-items: start; }
+    .column {
+      background: rgba(255,252,247,.9); border: 1px solid var(--line); border-radius: 18px;
+      padding: 1rem; min-height: 280px; border-top-width: 4px;
+    }
+    .column-04 { border-top-color: var(--stage-04); }
+    .column-77 { border-top-color: var(--stage-77); }
+    .column-118 { border-top-color: var(--stage-118); }
+    .column-head { display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: start; margin-bottom: .75rem; }
+    .stage-code {
+      width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+      font-family: var(--font-display); font-weight: 800; color: #fff;
+    }
+    .column-04 .stage-code { background: var(--stage-04); }
+    .column-77 .stage-code { background: var(--stage-77); }
+    .column-118 .stage-code { background: var(--stage-118); }
+    .column-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; }
+    .column-head p { margin: .2rem 0 0; color: var(--ink-soft); font-size: .82rem; }
+    .count {
+      min-width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--green-100); color: var(--green-900); font-weight: 700; font-size: .85rem;
+    }
+    .column-meta {
+      font-size: .82rem; color: var(--ink-soft); margin-bottom: .85rem; padding-bottom: .75rem;
+      border-bottom: 1px dashed var(--line);
+    }
+    .cards { display: grid; gap: .75rem; }
+    .empty {
+      padding: 1.5rem .75rem; text-align: center; color: var(--ink-soft); font-size: .9rem;
+      border: 1px dashed var(--line); border-radius: 12px;
+    }
+    .order-card {
+      border: 1px solid var(--line); border-radius: 14px; padding: .95rem; background: #fff;
+      display: grid; gap: .65rem;
+    }
+    .order-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+    .order-no { font-family: var(--font-display); font-weight: 700; color: var(--green-900); }
+    .order-actions { display: flex; gap: .35rem; }
+    .icon-btn {
+      background: var(--sand); color: var(--ink-soft); border-radius: 8px;
+      padding: .3rem .55rem; font-size: .78rem;
+    }
+    .icon-btn.danger:hover { background: rgba(155,44,44,.12); color: var(--danger); }
+    .order-card h4 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; }
+    .showroom { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+    .amounts { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .amounts div { background: var(--sand); border-radius: 10px; padding: .55rem .65rem; }
+    .amounts span { display: block; font-size: .72rem; color: var(--ink-soft); margin-bottom: .2rem; }
+    .amounts strong { font-size: .88rem; }
+    .move > span { display: block; font-size: .78rem; color: var(--ink-soft); margin-bottom: .35rem; }
+    .move-btns { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .move-btn {
+      border: 1px solid var(--line); background: #fff; padding: .35rem .65rem; font-size: .75rem; color: var(--ink);
+    }
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(4,40,24,.45); backdrop-filter: blur(4px);
+      z-index: 40; display: grid; place-items: center; padding: 1rem;
+    }
+    .modal {
+      width: min(560px, 100%); max-height: min(90vh, 820px); overflow: auto;
+      background: var(--white); border-radius: 20px; box-shadow: 0 30px 80px rgba(4,40,24,.28);
+      padding: 1.25rem;
+    }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .modal-head h2 { margin: 0; font-family: var(--font-display); font-size: 1.3rem; color: var(--green-900); }
+    .close-btn { background: var(--sand); padding: .45rem .9rem; color: var(--ink-soft); }
+    .order-form { display: grid; gap: .9rem; }
+    .order-form label { display: grid; gap: .4rem; font-size: .9rem; color: var(--ink-soft); font-weight: 500; }
+    .order-form input {
+      border: 1px solid var(--line); border-radius: 12px; padding: .8rem .9rem; background: #fff; outline: none;
+    }
+    .order-form input:focus { border-color: var(--green-900); box-shadow: 0 0 0 4px rgba(21,122,82,.12); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .stage-picker { margin: 0; border: 1px solid var(--line); border-radius: 14px; padding: .85rem; }
+    .stage-options { display: grid; gap: .5rem; }
+    .stage-option {
+      display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: .55rem;
+      padding: .7rem .8rem; border-radius: 12px; border: 1px solid var(--line); cursor: pointer; background: #fff;
+    }
+    .stage-option:has(input:checked) { border-color: var(--green-900); background: var(--green-100); }
+    .opt-code { font-family: var(--font-display); font-weight: 800; min-width: 2rem; }
+    .stage-04 .opt-code { color: var(--stage-04); }
+    .stage-77 .opt-code { color: var(--stage-77); }
+    .stage-118 .opt-code { color: var(--stage-118); }
+    .form-actions { display: flex; gap: .65rem; }
+    .toast {
+      position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+      background: var(--green-950); color: #fff; padding: .8rem 1.2rem; border-radius: 999px;
+      box-shadow: 0 12px 30px rgba(4,40,24,.3); z-index: 50; font-size: .92rem;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 980px) {
+      .pipeline, .hero-stats { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .topbar { flex-direction: column; align-items: stretch; }
+      .btn-primary { width: 100%; }
+      .form-row, .form-actions { grid-template-columns: 1fr; flex-direction: column; }
+      .toast { width: calc(100% - 2rem); text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">الرياض</div>
+      <div>
+        <h1>بنك الرياض</h1>
+        <p>لوحة تحكم المبيعات — تمويل المعارض</p>
+      </div>
+    </div>
+    <button type="button" class="btn-primary" id="addBtn">+ إضافة طلب</button>
+  </header>
+
+  <main class="main">
+    <section class="hero">
+      <p class="eyebrow">مسار التمويل</p>
+      <h2>تابع طلبات عملائك من الموافقة حتى الصرف</h2>
+      <p class="hero-sub">أضف رقم الطلب وبيانات العميل، ثم حرّك الطلب عبر المراحل: موافقة مبدئية، عقد جاهز، وتم التمويل.</p>
+      <div class="hero-stats">
+        <div class="stat"><span>إجمالي الطلبات</span><strong id="statCount">0</strong></div>
+        <div class="stat"><span>مبلغ التمويل</span><strong id="statFinance">0 ر.س</strong></div>
+        <div class="stat"><span>إجمالي العمولة</span><strong id="statCommission">0 ر.س</strong></div>
+      </div>
+    </section>
+
+    <input class="search" id="search" type="search" placeholder="ابحث برقم الطلب أو اسم العميل أو المعرض..." />
+
+    <section class="pipeline" id="pipeline"></section>
+  </main>
+
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2 id="modalTitle">إضافة طلب جديد</h2>
+        <button type="button" class="close-btn" id="closeBtn">إغلاق</button>
+      </div>
+      <form class="order-form" id="orderForm">
+        <label>رقم الطلب<input required name="orderNumber" placeholder="مثال: 452189" /></label>
+        <label>اسم العميل<input required name="customerName" placeholder="الاسم الكامل" /></label>
+        <label>المعرض<input required name="showroom" placeholder="اسم المعرض أو الوكالة" /></label>
+        <div class="form-row">
+          <label>مبلغ التمويل (ر.س)<input required type="number" min="0" step="1" name="financeAmount" placeholder="0" /></label>
+          <label>قيمة العمولة (ر.س)<input required type="number" min="0" step="1" name="commission" placeholder="0" /></label>
+        </div>
+        <fieldset class="stage-picker">
+          <legend>المرحلة الحالية</legend>
+          <div class="stage-options" id="stageOptions"></div>
+        </fieldset>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary" id="submitBtn">إضافة الطلب</button>
+          <button type="button" class="btn-ghost" id="cancelBtn">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script>
+    const STORAGE_KEY = 'riyadh-bank-sales-orders'
+    const STAGES = [
+      { id: '04', code: '04', title: 'موافقة مبدئية', description: 'تم الحصول على الموافقة المبدئية للتمويل' },
+      { id: '77', code: '77', title: 'عقد جاهز', description: 'العقد جاهز للتوقيع والإتمام' },
+      { id: '118', code: '118', title: 'تم التمويل', description: 'اكتمل التمويل وصُرف المبلغ' },
+    ]
+
+    let orders = loadOrders()
+    let editingId = null
+    let toastTimer = null
+
+    const els = {
+      pipeline: document.getElementById('pipeline'),
+      search: document.getElementById('search'),
+      modal: document.getElementById('modal'),
+      form: document.getElementById('orderForm'),
+      modalTitle: document.getElementById('modalTitle'),
+      submitBtn: document.getElementById('submitBtn'),
+      stageOptions: document.getElementById('stageOptions'),
+      toast: document.getElementById('toast'),
+      statCount: document.getElementById('statCount'),
+      statFinance: document.getElementById('statFinance'),
+      statCommission: document.getElementById('statCommission'),
+    }
+
+    function loadOrders() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        return Array.isArray(parsed) ? parsed : []
+      } catch { return [] }
+    }
+
+    function saveOrders() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders))
+    }
+
+    function money(n) {
+      return new Intl.NumberFormat('ar-SA', { maximumFractionDigits: 0 }).format(n) + ' ر.س'
+    }
+
+    function showToast(msg) {
+      els.toast.textContent = msg
+      els.toast.classList.remove('hidden')
+      clearTimeout(toastTimer)
+      toastTimer = setTimeout(() => els.toast.classList.add('hidden'), 2600)
+    }
+
+    function openModal(order) {
+      editingId = order ? order.id : null
+      els.modalTitle.textContent = order ? 'تعديل الطلب' : 'إضافة طلب جديد'
+      els.submitBtn.textContent = order ? 'حفظ التعديلات' : 'إضافة الطلب'
+      els.form.orderNumber.value = order?.orderNumber || ''
+      els.form.customerName.value = order?.customerName || ''
+      els.form.showroom.value = order?.showroom || ''
+      els.form.financeAmount.value = order ? order.financeAmount : ''
+      els.form.commission.value = order ? order.commission : ''
+      const stage = order?.stage || '04'
+      els.stageOptions.innerHTML = STAGES.map(s => `
+        <label class="stage-option stage-${s.id}">
+          <input type="radio" name="stage" value="${s.id}" ${s.id === stage ? 'checked' : ''} />
+          <span class="opt-code">${s.code}</span>
+          <span>${s.title}</span>
+        </label>
+      `).join('')
+      els.modal.classList.remove('hidden')
+    }
+
+    function closeModal() {
+      els.modal.classList.add('hidden')
+      editingId = null
+      els.form.reset()
+    }
+
+    function filteredOrders() {
+      const q = els.search.value.trim().toLowerCase()
+      if (!q) return orders
+      return orders.filter(o =>
+        o.orderNumber.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q) ||
+        o.showroom.toLowerCase().includes(q)
+      )
+    }
+
+    function render() {
+      const list = filteredOrders()
+      els.statCount.textContent = String(orders.length)
+      els.statFinance.textContent = money(orders.reduce((s, o) => s + o.financeAmount, 0))
+      els.statCommission.textContent = money(orders.reduce((s, o) => s + o.commission, 0))
+
+      els.pipeline.innerHTML = STAGES.map(stage => {
+        const stageOrders = list.filter(o => o.stage === stage.id)
+        const stageFinance = stageOrders.reduce((s, o) => s + o.financeAmount, 0)
+        const cards = stageOrders.length === 0
+          ? `<div class="empty">لا توجد طلبات في هذه المرحلة</div>`
+          : stageOrders.map(order => {
+              const moves = STAGES.filter(s => s.id !== order.stage)
+                .map(s => `<button type="button" class="move-btn" data-move="${order.id}|${s.id}">${s.code} — ${s.title}</button>`)
+                .join('')
+              return `
+                <article class="order-card">
+                  <div class="order-top">
+                    <span class="order-no">#${order.orderNumber}</span>
+                    <div class="order-actions">
+                      <button type="button" class="icon-btn" data-edit="${order.id}">تعديل</button>
+                      <button type="button" class="icon-btn danger" data-delete="${order.id}">حذف</button>
+                    </div>
+                  </div>
+                  <h4>${escapeHtml(order.customerName)}</h4>
+                  <p class="showroom">${escapeHtml(order.showroom)}</p>
+                  <div class="amounts">
+                    <div><span>مبلغ التمويل</span><strong>${money(order.financeAmount)}</strong></div>
+                    <div><span>العمولة</span><strong>${money(order.commission)}</strong></div>
+                  </div>
+                  <div class="move"><span>نقل إلى</span><div class="move-btns">${moves}</div></div>
+                </article>
+              `
+            }).join('')
+
+        return `
+          <div class="column column-${stage.id}">
+            <div class="column-head">
+              <div class="stage-code">${stage.code}</div>
+              <div><h3>${stage.title}</h3><p>${stage.description}</p></div>
+              <span class="count">${stageOrders.length}</span>
+            </div>
+            <div class="column-meta">تمويل المرحلة: ${money(stageFinance)}</div>
+            <div class="cards">${cards}</div>
+          </div>
+        `
+      }).join('')
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+    }
+
+    document.getElementById('addBtn').addEventListener('click', () => openModal(null))
+    document.getElementById('closeBtn').addEventListener('click', closeModal)
+    document.getElementById('cancelBtn').addEventListener('click', closeModal)
+    els.modal.addEventListener('click', (e) => { if (e.target === els.modal) closeModal() })
+    els.search.addEventListener('input', render)
+
+    els.form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      const data = new FormData(els.form)
+      const financeAmount = Number(data.get('financeAmount'))
+      const commission = Number(data.get('commission'))
+      if (!Number.isFinite(financeAmount) || financeAmount < 0 || !Number.isFinite(commission) || commission < 0) {
+        showToast('يرجى تعبئة جميع الحقول بشكل صحيح')
+        return
+      }
+      const now = new Date().toISOString()
+      const payload = {
+        orderNumber: String(data.get('orderNumber')).trim(),
+        customerName: String(data.get('customerName')).trim(),
+        showroom: String(data.get('showroom')).trim(),
+        financeAmount,
+        commission,
+        stage: String(data.get('stage') || '04'),
+        updatedAt: now,
+      }
+      if (editingId) {
+        orders = orders.map(o => o.id === editingId ? { ...o, ...payload } : o)
+        showToast('تم تحديث الطلب بنجاح')
+      } else {
+        orders = [{ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...payload, createdAt: now }, ...orders]
+        showToast('تمت إضافة الطلب بنجاح')
+      }
+      saveOrders()
+      closeModal()
+      render()
+    })
+
+    els.pipeline.addEventListener('click', (e) => {
+      const t = e.target
+      if (!(t instanceof HTMLElement)) return
+      if (t.dataset.edit) {
+        const order = orders.find(o => o.id === t.dataset.edit)
+        if (order) openModal(order)
+      }
+      if (t.dataset.delete) {
+        orders = orders.filter(o => o.id !== t.dataset.delete)
+        saveOrders()
+        showToast('تم حذف الطلب')
+        render()
+      }
+      if (t.dataset.move) {
+        const [id, stage] = t.dataset.move.split('|')
+        orders = orders.map(o => o.id === id ? { ...o, stage, updatedAt: new Date().toISOString() } : o)
+        saveOrders()
+        const title = STAGES.find(s => s.id === stage)?.title
+        showToast(`تم نقل الطلب إلى: ${title}`)
+        render()
+      }
+    })
+
+    render()
+  </script>
+</body>
+</html>
