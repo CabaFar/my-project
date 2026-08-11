@@ -1,0 +1,8 @@
+{
+  "appId": "sa.riyadbank.sales",
+  "appName": "لوحة مبيعات بنك الرياض",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
