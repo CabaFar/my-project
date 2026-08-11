@@ -180,16 +180,16 @@
       <div class="target-head">
         <div>
           <h3>التارقت الشهري</h3>
-          <p id="targetDesc">يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120</p>
+          <p id="targetDesc">يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77 و118 و120</p>
         </div>
         <div class="target-input-row">
-          <label>المستهدف (عدد الطلبات)<input type="number" min="0" step="1" id="targetInput" placeholder="مثال: 30" /></label>
+          <label>المستهدف (مبلغ التمويل ر.س)<input type="number" min="0" step="1" id="targetInput" placeholder="مثال: 500000" /></label>
           <button type="button" class="btn-primary" id="saveTargetBtn">حفظ التارقت</button>
         </div>
       </div>
       <div class="target-metrics">
-        <div class="target-metric"><span>المستهدف</span><strong id="targetGoal">0</strong></div>
-        <div class="target-metric"><span>المتحقق (77 + 118 + 120)</span><strong id="targetAchieved">0</strong></div>
+        <div class="target-metric"><span>المستهدف</span><strong id="targetGoal">0 ر.س</strong></div>
+        <div class="target-metric"><span>المتحقق (77 + 118 + 120)</span><strong id="targetAchieved">0 ر.س</strong></div>
         <div class="target-metric highlight"><span>نسبة الإنجاز</span><strong id="targetPercent">—</strong></div>
       </div>
       <div class="progress-track"><div class="progress-fill" id="targetBar" style="width:0%"></div></div>
@@ -299,20 +299,20 @@
     function saveTargetValue(v) { localStorage.setItem(TARGET_KEY, String(v)) }
     function renderTarget() {
       const monthOrders = orders.filter(o => matchesDate(o.createdAt, 'month'))
-      const achieved = monthOrders.filter(o => TARGET_STAGES.includes(o.stage)).length
+      const achieved = monthOrders.filter(o => TARGET_STAGES.includes(o.stage)).reduce((s,o)=>s+o.financeAmount,0)
       const percent = monthlyTarget > 0 ? Math.min(999, Math.round((achieved / monthlyTarget) * 1000) / 10) : 0
       const width = monthlyTarget > 0 ? Math.min(100, (achieved / monthlyTarget) * 100) : 0
       const monthName = new Intl.DateTimeFormat('ar-SA', { month: 'long', year: 'numeric' }).format(new Date())
-      document.getElementById('targetDesc').textContent = `يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120 — ${monthName}`
-      document.getElementById('targetGoal').textContent = String(monthlyTarget)
-      document.getElementById('targetAchieved').textContent = String(achieved)
+      document.getElementById('targetDesc').textContent = `يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77 و118 و120 — ${monthName}`
+      document.getElementById('targetGoal').textContent = money(monthlyTarget)
+      document.getElementById('targetAchieved').textContent = money(achieved)
       document.getElementById('targetPercent').textContent = monthlyTarget > 0 ? percent + '%' : '—'
       const bar = document.getElementById('targetBar')
       bar.style.width = width + '%'
       bar.classList.toggle('done', width >= 100)
       document.getElementById('targetNote').textContent = monthlyTarget > 0
-        ? `تحققت ${achieved} من أصل ${monthlyTarget} طلب لهذا الشهر`
-        : 'أدخل التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'
+        ? `تحقق ${money(achieved)} من أصل ${money(monthlyTarget)} لهذا الشهر`
+        : 'أدخل مبلغ التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'
       const input = document.getElementById('targetInput')
       if (document.activeElement !== input) input.value = monthlyTarget > 0 ? String(monthlyTarget) : ''
     }
@@ -452,7 +452,7 @@
 
     document.getElementById('saveTargetBtn').addEventListener('click', () => {
       const value = Number(document.getElementById('targetInput').value)
-      if (!Number.isFinite(value) || value < 0) { showToast('أدخل رقم تارقت صحيح'); return }
+      if (!Number.isFinite(value) || value < 0) { showToast('أدخل مبلغ تارقت صحيح'); return }
       monthlyTarget = value
       saveTargetValue(value)
       showToast('تم حفظ التارقت الشهري')
