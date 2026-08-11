@@ -50,6 +50,26 @@
     .stat { padding: 1rem 1.1rem; border-radius: 14px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); }
     .stat span { display: block; font-size: .82rem; opacity: .85; margin-bottom: .35rem; }
     .stat strong { font-family: var(--font-display); font-size: clamp(1.1rem, 2vw, 1.45rem); }
+
+    .target-panel { background: rgba(255,252,247,.94); border: 1px solid var(--line); border-radius: 18px; padding: 1.15rem 1.2rem 1.25rem; display: grid; gap: 1rem; box-shadow: 0 10px 28px rgba(4,40,24,.05); }
+    .target-head { display: flex; justify-content: space-between; gap: 1rem; align-items: end; flex-wrap: wrap; }
+    .target-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.2rem; color: var(--green-900); }
+    .target-head p { margin: .35rem 0 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.5; max-width: 36rem; }
+    .target-input-row { display: flex; gap: .65rem; align-items: end; flex-wrap: wrap; }
+    .target-input-row label { display: grid; gap: .35rem; font-size: .85rem; color: var(--ink-soft); font-weight: 500; }
+    .target-input-row input { width: min(180px, 100%); border: 1px solid var(--line); border-radius: 12px; padding: .75rem .85rem; background: #fff; outline: none; }
+    .target-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .75rem; }
+    .target-metric { background: var(--sand); border-radius: 14px; padding: .9rem 1rem; }
+    .target-metric span { display: block; font-size: .8rem; color: var(--ink-soft); margin-bottom: .35rem; }
+    .target-metric strong { font-family: var(--font-display); font-size: 1.35rem; }
+    .target-metric.highlight { background: linear-gradient(135deg, rgba(11,92,59,.12), rgba(21,122,82,.18)); }
+    .target-metric.highlight strong { color: var(--green-900); }
+    .progress-track { height: 12px; border-radius: 999px; background: rgba(11,92,59,.1); overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green-800), var(--green-900)); transition: width .35s ease; }
+    .progress-fill.done { background: linear-gradient(90deg, #157a52, #0f5c8c); }
+    .target-note { margin: 0; font-size: .88rem; color: var(--ink-soft); }
+    @media (max-width: 980px) { .target-metrics { grid-template-columns: 1fr; } }
+
     .filters-panel { display: grid; gap: 1rem; }
     .filter-block { background: rgba(255,252,247,.9); border: 1px solid var(--line); border-radius: 18px; padding: 1rem; }
     .filter-block h3 { margin: 0 0 .85rem; font-family: var(--font-display); font-size: 1.05rem; color: var(--green-900); }
@@ -155,6 +175,27 @@
       </div>
     </section>
 
+
+    <section class="target-panel" aria-label="التارقت الشهري">
+      <div class="target-head">
+        <div>
+          <h3>التارقت الشهري</h3>
+          <p id="targetDesc">يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120</p>
+        </div>
+        <div class="target-input-row">
+          <label>المستهدف (عدد الطلبات)<input type="number" min="0" step="1" id="targetInput" placeholder="مثال: 30" /></label>
+          <button type="button" class="btn-primary" id="saveTargetBtn">حفظ التارقت</button>
+        </div>
+      </div>
+      <div class="target-metrics">
+        <div class="target-metric"><span>المستهدف</span><strong id="targetGoal">0</strong></div>
+        <div class="target-metric"><span>المتحقق (77 + 118 + 120)</span><strong id="targetAchieved">0</strong></div>
+        <div class="target-metric highlight"><span>نسبة الإنجاز</span><strong id="targetPercent">—</strong></div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="targetBar" style="width:0%"></div></div>
+      <p class="target-note" id="targetNote">أدخل التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة</p>
+    </section>
+
     <section class="filters-panel">
       <div class="filter-block">
         <h3>المراحل</h3>
@@ -200,6 +241,8 @@
 
   <script>
     const STORAGE_KEY = 'riyadh-bank-sales-orders'
+    const TARGET_KEY = 'riyadh-bank-monthly-target'
+    const TARGET_STAGES = ['77','118','120']
     const ICONS = {
       check: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       file: '<svg viewBox="0 0 24 24" fill="none"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
@@ -224,6 +267,7 @@
     ]
 
     let orders = loadOrders()
+    let monthlyTarget = loadTarget()
     let editingId = null
     let stageFilter = 'all'
     let dateFilter = 'all'
@@ -243,6 +287,34 @@
       statCount: document.getElementById('statCount'),
       statFinance: document.getElementById('statFinance'),
       statCommission: document.getElementById('statCommission'),
+    }
+
+
+    function loadTarget() {
+      try {
+        const value = Number(localStorage.getItem(TARGET_KEY) || '0')
+        return Number.isFinite(value) && value >= 0 ? value : 0
+      } catch { return 0 }
+    }
+    function saveTargetValue(v) { localStorage.setItem(TARGET_KEY, String(v)) }
+    function renderTarget() {
+      const monthOrders = orders.filter(o => matchesDate(o.createdAt, 'month'))
+      const achieved = monthOrders.filter(o => TARGET_STAGES.includes(o.stage)).length
+      const percent = monthlyTarget > 0 ? Math.min(999, Math.round((achieved / monthlyTarget) * 1000) / 10) : 0
+      const width = monthlyTarget > 0 ? Math.min(100, (achieved / monthlyTarget) * 100) : 0
+      const monthName = new Intl.DateTimeFormat('ar-SA', { month: 'long', year: 'numeric' }).format(new Date())
+      document.getElementById('targetDesc').textContent = `يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120 — ${monthName}`
+      document.getElementById('targetGoal').textContent = String(monthlyTarget)
+      document.getElementById('targetAchieved').textContent = String(achieved)
+      document.getElementById('targetPercent').textContent = monthlyTarget > 0 ? percent + '%' : '—'
+      const bar = document.getElementById('targetBar')
+      bar.style.width = width + '%'
+      bar.classList.toggle('done', width >= 100)
+      document.getElementById('targetNote').textContent = monthlyTarget > 0
+        ? `تحققت ${achieved} من أصل ${monthlyTarget} طلب لهذا الشهر`
+        : 'أدخل التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'
+      const input = document.getElementById('targetInput')
+      if (document.activeElement !== input) input.value = monthlyTarget > 0 ? String(monthlyTarget) : ''
     }
 
     function loadOrders() {
@@ -338,6 +410,7 @@
       els.statFinance.textContent = money(list.reduce((s,o)=>s+o.financeAmount,0))
       els.statCommission.textContent = money(list.reduce((s,o)=>s+o.commission,0))
       renderFilters()
+      renderTarget()
 
       const visible = stageFilter === 'all' ? STAGES : STAGES.filter(s => s.id === stageFilter)
       els.pipeline.innerHTML = visible.map(stage => {
@@ -377,6 +450,14 @@
       }).join('')
     }
 
+    document.getElementById('saveTargetBtn').addEventListener('click', () => {
+      const value = Number(document.getElementById('targetInput').value)
+      if (!Number.isFinite(value) || value < 0) { showToast('أدخل رقم تارقت صحيح'); return }
+      monthlyTarget = value
+      saveTargetValue(value)
+      showToast('تم حفظ التارقت الشهري')
+      render()
+    })
     document.getElementById('addBtn').addEventListener('click', () => openModal(null))
     document.getElementById('closeBtn').addEventListener('click', closeModal)
     document.getElementById('cancelBtn').addEventListener('click', closeModal)
