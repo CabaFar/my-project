@@ -179,17 +179,17 @@
     <section class="target-panel" aria-label="التارقت الشهري">
       <div class="target-head">
         <div>
-          <h3>التارقت الشهري</h3>
-          <p id="targetDesc">يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77 و118 و120</p>
+          <h3>التارقت الشهري (بالمبالغ)</h3>
+          <p id="targetDesc">المتحقق = إجمالي مبالغ التمويل في المراحل 77 و118 و120</p>
         </div>
         <div class="target-input-row">
-          <label>المستهدف (مبلغ التمويل ر.س)<input type="number" min="0" step="1" id="targetInput" placeholder="مثال: 500000" /></label>
+          <label>المستهدف الشهري (ر.س)<input type="number" min="0" step="1" id="targetInput" placeholder="مثال: 500000" /></label>
           <button type="button" class="btn-primary" id="saveTargetBtn">حفظ التارقت</button>
         </div>
       </div>
       <div class="target-metrics">
-        <div class="target-metric"><span>المستهدف</span><strong id="targetGoal">0 ر.س</strong></div>
-        <div class="target-metric"><span>المتحقق (77 + 118 + 120)</span><strong id="targetAchieved">0 ر.س</strong></div>
+        <div class="target-metric"><span>المستهدف (مبلغ)</span><strong id="targetGoal">0 ر.س</strong></div>
+        <div class="target-metric"><span>المتحقق: إجمالي مبالغ التمويل (77 + 118 + 120)</span><strong id="targetAchieved">0 ر.س</strong></div>
         <div class="target-metric highlight"><span>نسبة الإنجاز</span><strong id="targetPercent">—</strong></div>
       </div>
       <div class="progress-track"><div class="progress-fill" id="targetBar" style="width:0%"></div></div>
@@ -298,12 +298,11 @@
     }
     function saveTargetValue(v) { localStorage.setItem(TARGET_KEY, String(v)) }
     function renderTarget() {
-      const monthOrders = orders.filter(o => matchesDate(o.createdAt, 'month'))
-      const achieved = monthOrders.filter(o => TARGET_STAGES.includes(o.stage)).reduce((s,o)=>s+o.financeAmount,0)
+      const achieved = orders.filter(o => TARGET_STAGES.includes(o.stage)).reduce((s,o)=>s+o.financeAmount,0)
       const percent = monthlyTarget > 0 ? Math.min(999, Math.round((achieved / monthlyTarget) * 1000) / 10) : 0
       const width = monthlyTarget > 0 ? Math.min(100, (achieved / monthlyTarget) * 100) : 0
       const monthName = new Intl.DateTimeFormat('ar-SA', { month: 'long', year: 'numeric' }).format(new Date())
-      document.getElementById('targetDesc').textContent = `يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77 و118 و120 — ${monthName}`
+      document.getElementById('targetDesc').textContent = `المتحقق = إجمالي مبالغ التمويل في المراحل 77 و118 و120 — ${monthName}`
       document.getElementById('targetGoal').textContent = money(monthlyTarget)
       document.getElementById('targetAchieved').textContent = money(achieved)
       document.getElementById('targetPercent').textContent = monthlyTarget > 0 ? percent + '%' : '—'
@@ -311,8 +310,8 @@
       bar.style.width = width + '%'
       bar.classList.toggle('done', width >= 100)
       document.getElementById('targetNote').textContent = monthlyTarget > 0
-        ? `تحقق ${money(achieved)} من أصل ${money(monthlyTarget)} لهذا الشهر`
-        : 'أدخل مبلغ التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'
+        ? `إجمالي مبالغ التمويل المتحقق ${money(achieved)} من أصل المستهدف ${money(monthlyTarget)}`
+        : 'أدخل مبلغ التارقت الشهري بالريال ثم اضغط حفظ'
       const input = document.getElementById('targetInput')
       if (document.activeElement !== input) input.value = monthlyTarget > 0 ? String(monthlyTarget) : ''
     }
@@ -452,10 +451,10 @@
 
     document.getElementById('saveTargetBtn').addEventListener('click', () => {
       const value = Number(document.getElementById('targetInput').value)
-      if (!Number.isFinite(value) || value < 0) { showToast('أدخل مبلغ تارقت صحيح'); return }
+      if (!Number.isFinite(value) || value < 0) { showToast('أدخل مبلغ تارقت صحيح بالريال'); return }
       monthlyTarget = value
       saveTargetValue(value)
-      showToast('تم حفظ التارقت الشهري')
+      showToast('تم حفظ التارقت الشهري بالمبلغ')
       render()
     })
     document.getElementById('addBtn').addEventListener('click', () => openModal(null))
