@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { STAGES } from './stages'
-import { loadOrders, saveOrders } from './storage'
+import { loadMonthlyTarget, loadOrders, saveMonthlyTarget, saveOrders } from './storage'
 import type { DateFilter, Order, StageId } from './types'
 import './App.css'
+
+const TARGET_STAGES: StageId[] = ['77', '118', '120']
 
 const EMPTY_FORM = {
   orderNumber: '',
@@ -143,6 +145,11 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 
 export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => loadOrders())
+  const [monthlyTarget, setMonthlyTarget] = useState<number>(() => loadMonthlyTarget())
+  const [targetInput, setTargetInput] = useState(() => {
+    const saved = loadMonthlyTarget()
+    return saved > 0 ? String(saved) : ''
+  })
   const [form, setForm] = useState(EMPTY_FORM)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -155,6 +162,10 @@ export default function App() {
   useEffect(() => {
     saveOrders(orders)
   }, [orders])
+
+  useEffect(() => {
+    saveMonthlyTarget(monthlyTarget)
+  }, [monthlyTarget])
 
   useEffect(() => {
     if (!toast) return
@@ -177,6 +188,32 @@ export default function App() {
 
   const totalFinance = filtered.reduce((s, o) => s + o.financeAmount, 0)
   const totalCommission = filtered.reduce((s, o) => s + o.commission, 0)
+
+  const monthOrders = orders.filter((o) => matchesDateFilter(o.createdAt, 'month'))
+  const achievedOrders = monthOrders.filter((o) =>
+    TARGET_STAGES.includes(o.stage),
+  ).length
+  const targetPercent =
+    monthlyTarget > 0
+      ? Math.min(999, Math.round((achievedOrders / monthlyTarget) * 1000) / 10)
+      : 0
+  const progressWidth =
+    monthlyTarget > 0 ? Math.min(100, (achievedOrders / monthlyTarget) * 100) : 0
+
+  const monthName = new Intl.DateTimeFormat('ar-SA', {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date())
+
+  function saveTarget() {
+    const value = Number(targetInput)
+    if (!Number.isFinite(value) || value < 0) {
+      setToast('أدخل رقم تارقت صحيح')
+      return
+    }
+    setMonthlyTarget(value)
+    setToast('تم حفظ التارقت الشهري')
+  }
 
   const visibleStages =
     stageFilter === 'all' ? STAGES : STAGES.filter((s) => s.id === stageFilter)
@@ -350,6 +387,61 @@ export default function App() {
               <strong>{formatMoney(totalCommission)} ر.س</strong>
             </div>
           </div>
+        </section>
+
+        <section className="target-panel" aria-label="التارقت الشهري">
+          <div className="target-head">
+            <div>
+              <h3>التارقت الشهري</h3>
+              <p>
+                يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120 —{' '}
+                {monthName}
+              </p>
+            </div>
+            <div className="target-input-row">
+              <label>
+                المستهدف (عدد الطلبات)
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={targetInput}
+                  onChange={(e) => setTargetInput(e.target.value)}
+                  placeholder="مثال: 30"
+                />
+              </label>
+              <button type="button" className="btn-primary" onClick={saveTarget}>
+                حفظ التارقت
+              </button>
+            </div>
+          </div>
+
+          <div className="target-metrics">
+            <div className="target-metric">
+              <span>المستهدف</span>
+              <strong>{formatMoney(monthlyTarget)}</strong>
+            </div>
+            <div className="target-metric">
+              <span>المتحقق (77 + 118 + 120)</span>
+              <strong>{formatMoney(achievedOrders)}</strong>
+            </div>
+            <div className="target-metric highlight">
+              <span>نسبة الإنجاز</span>
+              <strong>{monthlyTarget > 0 ? `${targetPercent}%` : '—'}</strong>
+            </div>
+          </div>
+
+          <div className="progress-track" aria-hidden="true">
+            <div
+              className={`progress-fill ${progressWidth >= 100 ? 'done' : ''}`}
+              style={{ width: `${progressWidth}%` }}
+            />
+          </div>
+          <p className="target-note">
+            {monthlyTarget > 0
+              ? `تحققت ${achievedOrders} من أصل ${monthlyTarget} طلب لهذا الشهر`
+              : 'أدخل التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'}
+          </p>
         </section>
 
         <section className="filters-panel" aria-label="فلاتر سريعة">

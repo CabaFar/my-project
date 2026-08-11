@@ -283,6 +283,132 @@ input {
   animation: fadeUp 0.72s ease both;
 }
 
+.target-panel {
+  background: rgba(255, 252, 247, 0.94);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.15rem 1.2rem 1.25rem;
+  display: grid;
+  gap: 1rem;
+  animation: fadeUp 0.7s ease both;
+  box-shadow: 0 10px 28px rgba(4, 40, 24, 0.05);
+}
+
+.target-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.target-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--green-900);
+}
+
+.target-head p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 36rem;
+}
+
+.target-input-row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.target-input-row label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.target-input-row input {
+  width: min(180px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: white;
+  outline: none;
+}
+
+.target-input-row input:focus {
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 4px rgba(21, 122, 82, 0.12);
+}
+
+.target-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.target-metric {
+  background: var(--sand);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+}
+
+.target-metric span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-bottom: 0.35rem;
+}
+
+.target-metric strong {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+
+.target-metric.highlight {
+  background: linear-gradient(135deg, rgba(11, 92, 59, 0.12), rgba(21, 122, 82, 0.18));
+}
+
+.target-metric.highlight strong {
+  color: var(--green-900);
+}
+
+.progress-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(11, 92, 59, 0.1);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green-800), var(--green-900));
+  transition: width 0.35s ease;
+}
+
+.progress-fill.done {
+  background: linear-gradient(90deg, #157a52, #0f5c8c);
+}
+
+.target-note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 980px) {
+  .target-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filter-block {
   background: rgba(255, 252, 247, 0.9);
   border: 1px solid var(--line);
