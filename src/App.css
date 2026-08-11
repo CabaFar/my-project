@@ -1203,3 +1203,357 @@ input {
     white-space: normal;
   }
 }
+
+.view-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.view-switch button {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.view-switch button.active {
+  background: linear-gradient(135deg, var(--green-800), var(--green-950));
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(11, 92, 59, 0.22);
+}
+
+.cash-dashboard {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.cash-hero {
+  padding: clamp(1.4rem, 3vw, 2.2rem);
+  border-radius: 24px;
+  color: #fff;
+  background: linear-gradient(160deg, #0b5c3b 0%, #157a52 45%, #0a3d28 100%);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 1.25rem;
+}
+
+.cash-hero .eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.cash-hero h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 3.2vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.cash-hero .hero-sub {
+  margin: 0.75rem 0 0;
+  line-height: 1.7;
+  opacity: 0.92;
+  max-width: 40rem;
+}
+
+.cash-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.cash-month-nav .btn-ghost {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cash-month-nav .btn-primary {
+  background: #fff;
+  color: var(--green-900);
+  box-shadow: none;
+}
+
+.cash-month-label {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 10rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.cash-month-label strong {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.cash-month-label span {
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+
+.cash-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.cash-summary-card {
+  background: rgba(255, 252, 247, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem 1.1rem 1.15rem;
+  border-top: 4px solid var(--green-800);
+  box-shadow: 0 10px 28px rgba(4, 40, 24, 0.05);
+}
+
+.cash-summary-card.waseeta {
+  border-top-color: #0f5c8c;
+}
+
+.cash-summary-card.beirut {
+  border-top-color: #b8860b;
+}
+
+.cash-summary-card.all {
+  border-top-color: var(--green-900);
+  background: linear-gradient(160deg, rgba(11, 92, 59, 0.08), rgba(255, 252, 247, 0.96));
+}
+
+.cash-summary-card h3 {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--green-900);
+}
+
+.cash-summary-card dl {
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cash-summary-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.cash-summary-card dt {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.cash-summary-card dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.cash-summary-card .net dd {
+  color: var(--green-900);
+}
+
+.cash-table-wrap {
+  background: rgba(255, 252, 247, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: 0 10px 28px rgba(4, 40, 24, 0.05);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.cash-table-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.cash-table-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--green-900);
+  font-size: 1.15rem;
+}
+
+.cash-table-head p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.danger-text {
+  color: var(--danger) !important;
+  border-color: rgba(155, 44, 44, 0.25) !important;
+}
+
+.cash-table-scroll {
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+
+.cash-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+}
+
+.cash-table th,
+.cash-table td {
+  padding: 0.65rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid rgba(11, 92, 59, 0.08);
+  text-align: center;
+  font-size: 0.88rem;
+  vertical-align: middle;
+}
+
+.cash-table thead th {
+  background: var(--sand);
+  color: var(--ink-soft);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.cash-table .branch-head {
+  color: #fff;
+  font-family: var(--font-display);
+}
+
+.cash-table .branch-head.waseeta {
+  background: #0f5c8c;
+}
+
+.cash-table .branch-head.beirut {
+  background: #9a7410;
+}
+
+.cash-table .branch-head.all {
+  background: var(--green-900);
+}
+
+.cash-table .sticky-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #fff;
+  text-align: right;
+  min-width: 9.5rem;
+  box-shadow: -6px 0 12px rgba(4, 40, 24, 0.04);
+}
+
+.cash-table thead .sticky-col {
+  background: var(--sand);
+  z-index: 4;
+}
+
+.cash-table tfoot .sticky-col,
+.cash-table tfoot td {
+  background: var(--green-100);
+  font-weight: 800;
+  border-bottom: none;
+}
+
+.cash-table .day-cell {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+}
+
+.cash-table .day-cell strong {
+  font-family: var(--font-display);
+  color: var(--ink);
+}
+
+.cash-table .day-cell span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.cash-table tr.is-today td {
+  background: rgba(21, 122, 82, 0.08);
+}
+
+.cash-table tr.is-today .sticky-col {
+  background: #e8f5ef;
+}
+
+.cash-input {
+  width: 100%;
+  min-width: 5.5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.5rem;
+  background: #fff;
+  text-align: center;
+  outline: none;
+}
+
+.cash-input:focus {
+  border-color: var(--green-900);
+  box-shadow: 0 0 0 3px rgba(21, 122, 82, 0.12);
+}
+
+.cash-input.expense {
+  background: #fff8f6;
+}
+
+.cash-table .total-cell {
+  font-family: var(--font-display);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cash-table .total-cell.expense {
+  color: var(--danger);
+}
+
+.cash-table .total-cell.net {
+  color: var(--green-900);
+}
+
+@media (max-width: 980px) {
+  .cash-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-switch {
+    width: 100%;
+  }
+
+  .view-switch button {
+    flex: 1;
+  }
+
+  .cash-month-nav {
+    width: 100%;
+  }
+
+  .cash-month-nav .btn-ghost,
+  .cash-month-nav .btn-primary {
+    flex: 1;
+  }
+}
+

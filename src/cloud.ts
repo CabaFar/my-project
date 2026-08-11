@@ -1,10 +1,16 @@
 import type { HistoryEntry, Order } from './types'
+import {
+  mergeCashDays,
+  normalizeCashDay,
+  type CashDayRecord,
+} from './cash'
 
 export interface CloudStore {
   updatedAt: string
   monthlyTarget: number
   orders: Order[]
   history: HistoryEntry[]
+  cashDays: CashDayRecord[]
 }
 
 const POINTER_URL =
@@ -44,6 +50,22 @@ async function resolveBlobId(): Promise<string | null> {
   return cachedBlobId
 }
 
+function normalizeCloudStore(data: Partial<CloudStore> | null | undefined): CloudStore | null {
+  if (!data || !Array.isArray(data.orders) || !Array.isArray(data.history)) return null
+  const cashDays = Array.isArray(data.cashDays)
+    ? data.cashDays
+        .map((item) => normalizeCashDay(item))
+        .filter((item): item is CashDayRecord => item !== null)
+    : []
+  return {
+    updatedAt: data.updatedAt || new Date().toISOString(),
+    monthlyTarget: Number(data.monthlyTarget) || 0,
+    orders: data.orders,
+    history: data.history,
+    cashDays,
+  }
+}
+
 export async function loadCloudStore(): Promise<CloudStore | null> {
   const blobId = await resolveBlobId()
   if (blobId) {
@@ -53,15 +75,9 @@ export async function loadCloudStore(): Promise<CloudStore | null> {
         headers: { Accept: 'application/json' },
       })
       if (res.ok) {
-        const data = (await res.json()) as CloudStore
-        if (data && Array.isArray(data.orders) && Array.isArray(data.history)) {
-          return {
-            updatedAt: data.updatedAt || new Date().toISOString(),
-            monthlyTarget: Number(data.monthlyTarget) || 0,
-            orders: data.orders,
-            history: data.history,
-          }
-        }
+        const data = (await res.json()) as Partial<CloudStore>
+        const normalized = normalizeCloudStore(data)
+        if (normalized) return normalized
       }
     } catch {
       // fall through to GitHub backup
@@ -71,15 +87,8 @@ export async function loadCloudStore(): Promise<CloudStore | null> {
   try {
     const res = await fetch(`${FALLBACK_STORE_URL}?t=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return null
-    const data = (await res.json()) as CloudStore
-    if (data && Array.isArray(data.orders) && Array.isArray(data.history)) {
-      return {
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        monthlyTarget: Number(data.monthlyTarget) || 0,
-        orders: data.orders,
-        history: data.history,
-      }
-    }
+    const data = (await res.json()) as Partial<CloudStore>
+    return normalizeCloudStore(data)
   } catch {
     // ignore
   }
@@ -89,6 +98,7 @@ export async function loadCloudStore(): Promise<CloudStore | null> {
 export async function saveCloudStore(store: CloudStore): Promise<boolean> {
   const payload: CloudStore = {
     ...store,
+    cashDays: store.cashDays ?? [],
     updatedAt: new Date().toISOString(),
   }
 
@@ -140,5 +150,6 @@ export function mergeStores(local: CloudStore, cloud: CloudStore): CloudStore {
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     ),
     history: history.slice(0, 1000),
+    cashDays: mergeCashDays(local.cashDays ?? [], cloud.cashDays ?? []),
   }
 }

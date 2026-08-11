@@ -2,16 +2,22 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { STAGES } from './stages'
 import {
   downloadBackupToDisk,
+  loadCashDays,
   loadHistory,
   loadMonthlyTarget,
   loadOrders,
+  saveCashDays,
   saveHistory,
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
 import { loadCloudStore, mergeStores, saveCloudStore, type CloudStore } from './cloud'
+import type { CashDayRecord } from './cash'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
+import CashDashboard from './CashDashboard'
 import './App.css'
+
+type AppView = 'sales' | 'cash'
 
 const TARGET_STAGES: StageId[] = ['77', '118', '120']
 
@@ -153,8 +159,10 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 ]
 
 export default function App() {
+  const [view, setView] = useState<AppView>('cash')
   const [orders, setOrders] = useState<Order[]>(() => loadOrders())
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
+  const [cashDays, setCashDays] = useState<CashDayRecord[]>(() => loadCashDays())
   const [monthlyTarget, setMonthlyTarget] = useState<number>(() => loadMonthlyTarget())
   const [targetInput, setTargetInput] = useState(() => {
     const saved = loadMonthlyTarget()
@@ -183,6 +191,10 @@ export default function App() {
   }, [history])
 
   useEffect(() => {
+    saveCashDays(cashDays)
+  }, [cashDays])
+
+  useEffect(() => {
     saveMonthlyTarget(monthlyTarget)
   }, [monthlyTarget])
 
@@ -197,19 +209,21 @@ export default function App() {
         monthlyTarget: loadMonthlyTarget(),
         orders: loadOrders(),
         history: loadHistory(),
+        cashDays: loadCashDays(),
       }
       if (cloud) {
         const merged = mergeStores(local, cloud)
         skipNextCloudSave.current = true
         setOrders(merged.orders)
         setHistory(merged.history)
+        setCashDays(merged.cashDays)
         setMonthlyTarget(merged.monthlyTarget)
         setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
         // Push merged result so all devices stay aligned
         const ok = await saveCloudStore(merged)
         setSyncState(ok ? 'ok' : 'error')
         setToast('تم تحميل البيانات من السحابة')
-      } else if (local.orders.length || local.history.length) {
+      } else if (local.orders.length || local.history.length || local.cashDays.length) {
         const ok = await saveCloudStore(local)
         setSyncState(ok ? 'ok' : 'error')
         setToast(ok ? 'تم رفع بيانات هذا الجهاز للسحابة' : 'تعذر الاتصال بالسحابة')
@@ -235,12 +249,13 @@ export default function App() {
       monthlyTarget,
       orders,
       history,
+      cashDays,
     }
     setSyncState('syncing')
     void saveCloudStore(store).then((ok) => {
       setSyncState(ok ? 'ok' : 'error')
     })
-  }, [orders, history, monthlyTarget])
+  }, [orders, history, monthlyTarget, cashDays])
 
   useEffect(() => {
     if (!toast) return
@@ -268,7 +283,7 @@ export default function App() {
   }
 
   function saveToDiskManual() {
-    downloadBackupToDisk(orders, history, monthlyTarget)
+    downloadBackupToDisk(orders, history, monthlyTarget, cashDays)
     setToast('تم حفظ نسخة على القرص')
   }
 
@@ -280,11 +295,13 @@ export default function App() {
       monthlyTarget,
       orders,
       history,
+      cashDays,
     }
     const merged = cloud ? mergeStores(local, cloud) : local
     skipNextCloudSave.current = true
     setOrders(merged.orders)
     setHistory(merged.history)
+    setCashDays(merged.cashDays)
     setMonthlyTarget(merged.monthlyTarget)
     setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
     const ok = await saveCloudStore(merged)
@@ -534,10 +551,30 @@ export default function App() {
           </div>
           <div className="brand-text">
             <h1>بنك الرياض</h1>
-            <p>لوحة تحكم المبيعات — تمويل المعارض</p>
+            <p>
+              {view === 'cash'
+                ? 'لوحة تحكم الكاش — فرع الوسيطاء وفرع بيروت'
+                : 'لوحة تحكم المبيعات — تمويل المعارض'}
+            </p>
           </div>
         </div>
         <div className="topbar-actions">
+          <nav className="view-switch" aria-label="أقسام اللوحة">
+            <button
+              type="button"
+              className={view === 'cash' ? 'active' : undefined}
+              onClick={() => setView('cash')}
+            >
+              لوحة الكاش
+            </button>
+            <button
+              type="button"
+              className={view === 'sales' ? 'active' : undefined}
+              onClick={() => setView('sales')}
+            >
+              لوحة المبيعات
+            </button>
+          </nav>
           <span
             className={`sync-badge sync-${syncState}`}
             title="حالة المزامنة السحابية"
@@ -569,19 +606,31 @@ export default function App() {
           <a className="btn-ghost" href={`${import.meta.env.BASE_URL}riyadh-sales-android.apk`} download>
             تحميل APK
           </a>
-          <button type="button" className="btn-ghost" onClick={() => setHistoryOpen(true)}>
-            سجل الخطوات ({history.length})
-          </button>
+          {view === 'sales' && (
+            <button type="button" className="btn-ghost" onClick={() => setHistoryOpen(true)}>
+              سجل الخطوات ({history.length})
+            </button>
+          )}
           <button type="button" className="btn-ghost" onClick={saveToDiskManual}>
             حفظ على القرص
           </button>
-          <button type="button" className="btn-primary" onClick={openNew}>
-            + إضافة طلب
-          </button>
+          {view === 'sales' && (
+            <button type="button" className="btn-primary" onClick={openNew}>
+              + إضافة طلب
+            </button>
+          )}
         </div>
       </header>
 
       <main className="main">
+        {view === 'cash' ? (
+          <CashDashboard
+            cashDays={cashDays}
+            onChange={setCashDays}
+            onToast={setToast}
+          />
+        ) : (
+          <>
         <section className="hero">
           <div className="hero-copy">
             <p className="eyebrow">مسار التمويل</p>
@@ -833,6 +882,8 @@ export default function App() {
             )
           })}
         </section>
+          </>
+        )}
       </main>
 
       {formOpen && (

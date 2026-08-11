@@ -2,5 +2,6 @@
   "updatedAt": "2026-08-11T17:15:00.000Z",
   "monthlyTarget": 0,
   "orders": [],
-  "history": []
+  "history": [],
+  "cashDays": []
 }
