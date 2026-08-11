@@ -189,8 +189,7 @@ export default function App() {
   const totalFinance = filtered.reduce((s, o) => s + o.financeAmount, 0)
   const totalCommission = filtered.reduce((s, o) => s + o.commission, 0)
 
-  const monthOrders = orders.filter((o) => matchesDateFilter(o.createdAt, 'month'))
-  const achievedAmount = monthOrders
+  const achievedAmount = orders
     .filter((o) => TARGET_STAGES.includes(o.stage))
     .reduce((sum, o) => sum + o.financeAmount, 0)
   const targetPercent =
@@ -208,11 +207,11 @@ export default function App() {
   function saveTarget() {
     const value = Number(targetInput)
     if (!Number.isFinite(value) || value < 0) {
-      setToast('أدخل مبلغ تارقت صحيح')
+      setToast('أدخل مبلغ تارقت صحيح بالريال')
       return
     }
     setMonthlyTarget(value)
-    setToast('تم حفظ التارقت الشهري')
+    setToast('تم حفظ التارقت الشهري بالمبلغ')
   }
 
   const visibleStages =
@@ -392,15 +391,15 @@ export default function App() {
         <section className="target-panel" aria-label="التارقت الشهري">
           <div className="target-head">
             <div>
-              <h3>التارقت الشهري</h3>
+              <h3>التارقت الشهري (بالمبالغ)</h3>
               <p>
-                يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77
-                و118 و120 — {monthName}
+                المتحقق = إجمالي مبالغ التمويل في المراحل 77 و118 و120 —{' '}
+                {monthName}
               </p>
             </div>
             <div className="target-input-row">
               <label>
-                المستهدف (مبلغ التمويل ر.س)
+                المستهدف الشهري (ر.س)
                 <input
                   type="number"
                   min="0"
@@ -418,11 +417,11 @@ export default function App() {
 
           <div className="target-metrics">
             <div className="target-metric">
-              <span>المستهدف</span>
+              <span>المستهدف (مبلغ)</span>
               <strong>{formatMoney(monthlyTarget)} ر.س</strong>
             </div>
             <div className="target-metric">
-              <span>المتحقق (77 + 118 + 120)</span>
+              <span>المتحقق: إجمالي مبالغ التمويل (77 + 118 + 120)</span>
               <strong>{formatMoney(achievedAmount)} ر.س</strong>
             </div>
             <div className="target-metric highlight">
@@ -439,8 +438,8 @@ export default function App() {
           </div>
           <p className="target-note">
             {monthlyTarget > 0
-              ? `تحقق ${formatMoney(achievedAmount)} ر.س من أصل ${formatMoney(monthlyTarget)} ر.س لهذا الشهر`
-              : 'أدخل مبلغ التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'}
+              ? `إجمالي مبالغ التمويل المتحقق ${formatMoney(achievedAmount)} ر.س من أصل المستهدف ${formatMoney(monthlyTarget)} ر.س`
+              : 'أدخل مبلغ التارقت الشهري بالريال ثم اضغط حفظ'}
           </p>
         </section>
 
