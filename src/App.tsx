@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { STAGES } from './stages'
-import { loadMonthlyTarget, loadOrders, saveMonthlyTarget, saveOrders } from './storage'
-import type { DateFilter, Order, StageId } from './types'
+import {
+  downloadBackupToDisk,
+  loadHistory,
+  loadMonthlyTarget,
+  loadOrders,
+  saveHistory,
+  saveMonthlyTarget,
+  saveOrders,
+} from './storage'
+import type { DateFilter, HistoryEntry, Order, StageId } from './types'
 import './App.css'
 
 const TARGET_STAGES: StageId[] = ['77', '118', '120']
@@ -145,6 +153,7 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 
 export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => loadOrders())
+  const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
   const [monthlyTarget, setMonthlyTarget] = useState<number>(() => loadMonthlyTarget())
   const [targetInput, setTargetInput] = useState(() => {
     const saved = loadMonthlyTarget()
@@ -153,25 +162,66 @@ export default function App() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null)
   const pipelineRef = useRef<HTMLElement | null>(null)
+  const skipNextDiskSave = useRef(true)
 
   useEffect(() => {
     saveOrders(orders)
   }, [orders])
 
   useEffect(() => {
+    saveHistory(history)
+  }, [history])
+
+  useEffect(() => {
     saveMonthlyTarget(monthlyTarget)
   }, [monthlyTarget])
+
+  useEffect(() => {
+    if (skipNextDiskSave.current) {
+      skipNextDiskSave.current = false
+      return
+    }
+    // Every logged step triggers a disk backup file
+    downloadBackupToDisk(orders, history, monthlyTarget)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history])
 
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 2600)
     return () => window.clearTimeout(t)
   }, [toast])
+
+  useEffect(() => {
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault()
+      const evt = e as Event & { prompt: () => Promise<void> }
+      setInstallEvent({ prompt: () => evt.prompt() })
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstall)
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)
+  }, [])
+
+  function logHistory(entry: Omit<HistoryEntry, 'id' | 'at'>) {
+    const item: HistoryEntry = {
+      id: createId(),
+      at: new Date().toISOString(),
+      ...entry,
+    }
+    setHistory((prev) => [item, ...prev].slice(0, 1000))
+  }
+
+  function saveToDiskManual() {
+    downloadBackupToDisk(orders, history, monthlyTarget)
+    setToast('تم حفظ نسخة على القرص')
+  }
 
   const dateFiltered = orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter))
 
@@ -211,6 +261,10 @@ export default function App() {
       return
     }
     setMonthlyTarget(value)
+    logHistory({
+      action: 'target',
+      detail: `تم تحديث التارقت الشهري إلى ${formatMoney(value)} ر.س`,
+    })
     setToast('تم حفظ التارقت الشهري بالمبلغ')
   }
 
@@ -286,8 +340,9 @@ export default function App() {
     const now = new Date().toISOString()
 
     if (editingId) {
-      setOrders((prev) =>
-        prev.map((o) =>
+      const prev = orders.find((o) => o.id === editingId)
+      setOrders((prevOrders) =>
+        prevOrders.map((o) =>
           o.id === editingId
             ? {
                 ...o,
@@ -302,6 +357,15 @@ export default function App() {
             : o,
         ),
       )
+      logHistory({
+        action: 'update',
+        orderId: editingId,
+        orderNumber: form.orderNumber.trim(),
+        customerName: form.customerName.trim(),
+        fromStage: prev?.stage ?? null,
+        toStage: form.stage,
+        detail: `تعديل الطلب #${form.orderNumber.trim()} — المرحلة ${form.stage}`,
+      })
       setToast('تم تحديث الطلب بنجاح')
     } else {
       const newOrder: Order = {
@@ -316,6 +380,14 @@ export default function App() {
         updatedAt: now,
       }
       setOrders((prev) => [newOrder, ...prev])
+      logHistory({
+        action: 'create',
+        orderId: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        customerName: newOrder.customerName,
+        toStage: newOrder.stage,
+        detail: `إضافة طلب #${newOrder.orderNumber} في المرحلة ${newOrder.stage}`,
+      })
       setToast('تمت إضافة الطلب بنجاح')
     }
 
@@ -324,22 +396,61 @@ export default function App() {
   }
 
   function moveOrder(id: string, stage: StageId) {
+    const current = orders.find((o) => o.id === id)
     setOrders((prev) =>
       prev.map((o) =>
         o.id === id ? { ...o, stage, updatedAt: new Date().toISOString() } : o,
       ),
     )
     const stageTitle = STAGES.find((s) => s.id === stage)?.title
+    logHistory({
+      action: 'move',
+      orderId: id,
+      orderNumber: current?.orderNumber,
+      customerName: current?.customerName,
+      fromStage: current?.stage ?? null,
+      toStage: stage,
+      detail: `نقل الطلب #${current?.orderNumber ?? ''} من ${current?.stage ?? '-'} إلى ${stage} (${stageTitle})`,
+    })
     setToast(`تم نقل الطلب إلى: ${stageTitle}`)
   }
 
   function deleteOrder(id: string) {
+    const current = orders.find((o) => o.id === id)
     setOrders((prev) => prev.filter((o) => o.id !== id))
+    logHistory({
+      action: 'delete',
+      orderId: id,
+      orderNumber: current?.orderNumber,
+      customerName: current?.customerName,
+      fromStage: current?.stage ?? null,
+      detail: `حذف الطلب #${current?.orderNumber ?? ''} من المرحلة ${current?.stage ?? '-'}`,
+    })
     setToast('تم حذف الطلب')
     if (editingId === id) {
       resetForm()
       setFormOpen(false)
     }
+  }
+
+  function deleteAllInStage(stageId: StageId) {
+    const stageOrders = orders.filter((o) => o.stage === stageId)
+    if (stageOrders.length === 0) {
+      setToast('لا توجد طلبات للحذف في هذه المرحلة')
+      return
+    }
+    const title = STAGES.find((s) => s.id === stageId)?.title
+    const ok = window.confirm(
+      `حذف جميع طلبات مرحلة ${stageId} — ${title}؟\nعدد الطلبات: ${stageOrders.length}`,
+    )
+    if (!ok) return
+    setOrders((prev) => prev.filter((o) => o.stage !== stageId))
+    logHistory({
+      action: 'delete_stage',
+      toStage: stageId,
+      detail: `حذف الكل من مرحلة ${stageId} — ${title} (${stageOrders.length} طلب)`,
+    })
+    setToast(`تم حذف جميع طلبات مرحلة ${stageId}`)
   }
 
   return (
@@ -357,9 +468,33 @@ export default function App() {
             <p>لوحة تحكم المبيعات — تمويل المعارض</p>
           </div>
         </div>
-        <button type="button" className="btn-primary" onClick={openNew}>
-          + إضافة طلب
-        </button>
+        <div className="topbar-actions">
+          {installEvent && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={async () => {
+                await installEvent.prompt()
+                setInstallEvent(null)
+                setToast('تم تثبيت تطبيق اللوحة على الجهاز')
+              }}
+            >
+              تثبيت تطبيق أندرويد
+            </button>
+          )}
+          <a className="btn-ghost" href={`${import.meta.env.BASE_URL}riyadh-sales-android.apk`} download>
+            تحميل APK
+          </a>
+          <button type="button" className="btn-ghost" onClick={() => setHistoryOpen(true)}>
+            سجل الخطوات ({history.length})
+          </button>
+          <button type="button" className="btn-ghost" onClick={saveToDiskManual}>
+            حفظ على القرص
+          </button>
+          <button type="button" className="btn-primary" onClick={openNew}>
+            + إضافة طلب
+          </button>
+        </div>
       </header>
 
       <main className="main">
@@ -536,7 +671,15 @@ export default function App() {
                 </div>
 
                 <div className="column-meta">
-                  تمويل المرحلة: {formatMoney(stageFinance)} ر.س
+                  <span>تمويل المرحلة: {formatMoney(stageFinance)} ر.س</span>
+                  <button
+                    type="button"
+                    className="delete-stage-btn"
+                    onClick={() => deleteAllInStage(stage.id)}
+                    disabled={stageOrders.length === 0}
+                  >
+                    حذف الكل
+                  </button>
                 </div>
 
                 <div className="cards">
@@ -745,6 +888,59 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {historyOpen && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setHistoryOpen(false)}
+        >
+          <div
+            className="modal history-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>سجل الخطوات</h2>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setHistoryOpen(false)}
+              >
+                إغلاق
+              </button>
+            </div>
+            <p className="history-hint">
+              كل خطوة تُسجَّل تلقائياً ويُحفظ ملف نسخة على القرص مع كل عملية.
+            </p>
+            <div className="history-list">
+              {history.length === 0 ? (
+                <div className="empty">لا يوجد سجل بعد</div>
+              ) : (
+                history.map((h) => (
+                  <article key={h.id} className="history-item">
+                    <time>
+                      {new Date(h.at).toLocaleString('ar-SA')}
+                    </time>
+                    <strong>{h.detail}</strong>
+                    {(h.customerName || h.orderNumber) && (
+                      <span>
+                        {h.orderNumber ? `#${h.orderNumber}` : ''}{' '}
+                        {h.customerName ?? ''}
+                      </span>
+                    )}
+                  </article>
+                ))
+              )}
+            </div>
+            <div className="form-actions">
+              <button type="button" className="btn-primary" onClick={saveToDiskManual}>
+                حفظ السجل على القرص
+              </button>
+            </div>
           </div>
         </div>
       )}

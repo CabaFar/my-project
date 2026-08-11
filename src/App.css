@@ -645,12 +645,93 @@ input {
   font-size: 0.85rem;
 }
 
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.topbar-actions .btn-ghost,
+.topbar-actions .btn-primary {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .column-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
   font-size: 0.82rem;
   color: var(--ink-soft);
   margin-bottom: 0.85rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px dashed var(--line);
+}
+
+.delete-stage-btn {
+  border: 1px solid rgba(155, 44, 44, 0.25);
+  background: rgba(155, 44, 44, 0.08);
+  color: var(--danger);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.delete-stage-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.delete-stage-btn:not(:disabled):hover {
+  background: rgba(155, 44, 44, 0.16);
+}
+
+.history-modal {
+  width: min(640px, 100%);
+}
+
+.history-hint {
+  margin: 0 0 0.85rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 50vh;
+  overflow: auto;
+  margin-bottom: 1rem;
+}
+
+.history-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: white;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.history-item time {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.history-item strong {
+  font-size: 0.95rem;
+}
+
+.history-item span {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }
 
 .cards {

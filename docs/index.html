@@ -103,6 +103,15 @@
     .column-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; }
     .column-head p { margin: .2rem 0 0; color: var(--ink-soft); font-size: .82rem; }
     .count { min-width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; background: var(--green-100); color: var(--green-900); font-weight: 700; font-size: .85rem; }
+
+    .topbar-actions { display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
+    .column-meta { display:flex; justify-content:space-between; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .delete-stage-btn { border:1px solid rgba(155,44,44,.25); background:rgba(155,44,44,.08); color:var(--danger); border-radius:999px; padding:.3rem .7rem; font-size:.78rem; cursor:pointer; }
+    .delete-stage-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .history-list { display:grid; gap:.65rem; max-height:50vh; overflow:auto; margin-bottom:1rem; }
+    .history-item { border:1px solid var(--line); border-radius:12px; padding:.75rem .85rem; background:#fff; display:grid; gap:.25rem; }
+    .history-item time { font-size:.78rem; color:var(--ink-soft); }
+
     .column-meta { font-size: .82rem; color: var(--ink-soft); margin-bottom: .85rem; padding-bottom: .75rem; border-bottom: 1px dashed var(--line); }
     .cards { display: grid; gap: .75rem; }
     .empty { padding: 1.5rem .75rem; text-align: center; color: var(--ink-soft); font-size: .9rem; border: 1px dashed var(--line); border-radius: 12px; }
@@ -160,7 +169,11 @@
         <p>لوحة تحكم المبيعات — تمويل المعارض</p>
       </div>
     </div>
-    <button type="button" class="btn-primary" id="addBtn">+ إضافة طلب</button>
+    <div class="topbar-actions">
+      <button type="button" class="btn-ghost" id="historyBtn">سجل الخطوات</button>
+      <button type="button" class="btn-ghost" id="saveDiskBtn">حفظ على القرص</button>
+      <button type="button" class="btn-primary" id="addBtn">+ إضافة طلب</button>
+    </div>
   </header>
 
   <main class="main">
@@ -237,11 +250,38 @@
     </div>
   </div>
 
+  <div class="modal-backdrop hidden" id="historyModal">
+    <div class="modal" role="dialog">
+      <div class="modal-head"><h2>سجل الخطوات</h2><button type="button" class="close-btn" id="closeHistoryBtn">إغلاق</button></div>
+      <p style="color:var(--ink-soft);font-size:.9rem">كل خطوة تُسجَّل ويُحفظ ملف نسخة على القرص.</p>
+      <div class="history-list" id="historyList"></div>
+      <button type="button" class="btn-primary" id="saveDiskBtn2">حفظ السجل على القرص</button>
+    </div>
+  </div>
   <div class="toast hidden" id="toast"></div>
 
   <script>
     const STORAGE_KEY = 'riyadh-bank-sales-orders'
     const TARGET_KEY = 'riyadh-bank-monthly-target'
+
+    const HISTORY_KEY = 'riyadh-bank-sales-history'
+    let history = loadHistory()
+    let skipDisk = true
+    function loadHistory(){ try { const p=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); return Array.isArray(p)?p:[] } catch { return [] } }
+    function saveHistoryStore(){ localStorage.setItem(HISTORY_KEY, JSON.stringify(history)) }
+    function downloadDisk(){
+      const payload={ savedAt:new Date().toISOString(), app:'riyadh-bank-sales', monthlyTarget, orders, history }
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})
+      const url=URL.createObjectURL(blob)
+      const a=document.createElement('a'); const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')
+      a.href=url; a.download=`riyadh-sales-backup-${stamp}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    }
+    function logHistory(detail, extra={}){
+      history=[{ id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`, at:new Date().toISOString(), detail, ...extra }, ...history].slice(0,1000)
+      saveHistoryStore()
+      if(!skipDisk) downloadDisk()
+    }
+
     const TARGET_STAGES = ['77','118','120']
     const ICONS = {
       check: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -443,7 +483,8 @@
             <div><h3>${stage.code} — ${stage.title}</h3><p>${stage.description}</p></div>
             <span class="count">${stageOrders.length}</span>
           </div>
-          <div class="column-meta">تمويل المرحلة: ${money(stageFinance)}</div>
+          <div class="column-meta"><span>تمويل المرحلة: ${money(stageFinance)}</span>
+            <button type="button" class="delete-stage-btn" data-delete-stage="${stage.id}" ${stageOrders.length===0?'disabled':''}>حذف الكل</button></div>
           <div class="cards">${cards}</div>
         </div>`
       }).join('')
@@ -498,10 +539,10 @@
       }
       if (editingId) {
         orders = orders.map(o => o.id === editingId ? { ...o, ...payload } : o)
-        showToast('تم تحديث الطلب بنجاح')
+        logHistory(`تعديل الطلب #${payload.orderNumber}`); showToast('تم تحديث الطلب بنجاح')
       } else {
         orders = [{ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, ...payload, createdAt: now }, ...orders]
-        showToast('تمت إضافة الطلب بنجاح')
+        logHistory(`إضافة طلب #${payload.orderNumber}`); showToast('تمت إضافة الطلب بنجاح')
       }
       saveOrders(); closeModal(); render()
     })
@@ -515,16 +556,37 @@
       }
       if (t.dataset.delete) {
         orders = orders.filter(o => o.id !== t.dataset.delete)
-        saveOrders(); showToast('تم حذف الطلب'); render()
+        saveOrders(); logHistory('حذف طلب'); showToast('تم حذف الطلب'); render()
       }
       if (t.dataset.move) {
         const [id, stage] = t.dataset.move.split('|')
         orders = orders.map(o => o.id === id ? { ...o, stage, updatedAt: new Date().toISOString() } : o)
         saveOrders()
-        showToast(`تم نقل الطلب إلى: ${STAGES.find(s => s.id === stage)?.title}`)
+        logHistory(`نقل الطلب إلى ${stage}`); showToast(`تم نقل الطلب إلى: ${STAGES.find(s => s.id === stage)?.title}`)
         render()
       }
     })
+
+
+    document.getElementById('historyBtn')?.addEventListener('click', () => {
+      const list=document.getElementById('historyList')
+      list.innerHTML = history.length===0 ? '<div class="empty">لا يوجد سجل بعد</div>' : history.map(h=>`<article class="history-item"><time>${new Date(h.at).toLocaleString('ar-SA')}</time><strong>${h.detail}</strong></article>`).join('')
+      document.getElementById('historyModal').classList.remove('hidden')
+    })
+    document.getElementById('closeHistoryBtn')?.addEventListener('click', () => document.getElementById('historyModal').classList.add('hidden'))
+    document.getElementById('saveDiskBtn')?.addEventListener('click', () => { downloadDisk(); showToast('تم حفظ نسخة على القرص') })
+    document.getElementById('saveDiskBtn2')?.addEventListener('click', () => { downloadDisk(); showToast('تم حفظ نسخة على القرص') })
+    els.pipeline.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-delete-stage]')
+      if (!btn) return
+      const stageId = btn.dataset.deleteStage
+      const stageOrders = orders.filter(o => o.stage === stageId)
+      if (!stageOrders.length) return
+      if (!confirm(`حذف جميع طلبات مرحلة ${stageId}؟ عدد: ${stageOrders.length}`)) return
+      orders = orders.filter(o => o.stage !== stageId)
+      saveOrders(); logHistory(`حذف الكل من مرحلة ${stageId} (${stageOrders.length} طلب)`); showToast('تم حذف الكل'); render()
+    })
+    skipDisk = false
 
     render()
   </script>
