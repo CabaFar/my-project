@@ -1,0 +1,84 @@
+name: Keep sales cloud alive
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh JSON cloud blob and backup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          POINTER=data/cloud-pointer.json
+          BLOB_ID=$(python3 -c "import json; print(json.load(open('$POINTER')).get('blobId',''))")
+          DATA='{"orders":[],"history":[],"monthlyTarget":0,"updatedAt":""}'
+
+          if [ -n "$BLOB_ID" ]; then
+            if curl -fsS "https://jsonblob.com/api/jsonBlob/$BLOB_ID" -H 'Accept: application/json' -o /tmp/cloud.json; then
+              DATA=$(cat /tmp/cloud.json)
+            fi
+          fi
+
+          # Always create a fresh blob so expiry renews
+          echo "$DATA" > /tmp/payload.json
+          python3 - <<'PY'
+          import json, pathlib, datetime
+          p=pathlib.Path('/tmp/payload.json')
+          try:
+            data=json.loads(p.read_text())
+          except Exception:
+            data={"orders":[],"history":[],"monthlyTarget":0}
+          if not isinstance(data.get('orders'), list): data['orders']=[]
+          if not isinstance(data.get('history'), list): data['history']=[]
+          data['updatedAt']=datetime.datetime.utcnow().isoformat()+'Z'
+          p.write_text(json.dumps(data, ensure_ascii=False))
+          pathlib.Path('data/sales-store.json').write_text(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
+
+          HEADERS=$(mktemp)
+          curl -fsS -D "$HEADERS" -o /tmp/newblob.json -X POST 'https://jsonblob.com/api/jsonBlob' \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json' \
+            --data-binary @/tmp/payload.json
+          NEW_ID=$(python3 - <<'PY'
+          import pathlib,re
+          h=pathlib.Path("'"$HEADERS"'").read_text()
+          m=re.search(r'x-jsonblob-id:\s*(\S+)', h, re.I)
+          if m: print(m.group(1).strip()); raise SystemExit
+          m=re.search(r'location:\s*.*/([0-9a-fA-F-]+)', h, re.I)
+          print(m.group(1).strip() if m else '')
+          PY
+          )
+
+          if [ -z "$NEW_ID" ]; then
+            echo "Failed to create blob"
+            exit 1
+          fi
+
+          python3 - <<PY
+          import json, datetime
+          json.dump({
+            "blobId": "$NEW_ID",
+            "updatedAt": datetime.datetime.utcnow().isoformat()+"Z"
+          }, open("data/cloud-pointer.json","w"), indent=2)
+          print("new blob", "$NEW_ID")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cloud-pointer.json data/sales-store.json
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: refresh sales cloud blob"
+            git push
+          fi

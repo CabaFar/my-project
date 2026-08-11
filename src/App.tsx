@@ -9,6 +9,7 @@ import {
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
+import { loadCloudStore, mergeStores, saveCloudStore, type CloudStore } from './cloud'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
 import './App.css'
 
@@ -168,8 +169,10 @@ export default function App() {
   const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
   const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null)
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
   const pipelineRef = useRef<HTMLElement | null>(null)
-  const skipNextDiskSave = useRef(true)
+  const skipNextCloudSave = useRef(true)
+  const cloudReady = useRef(false)
 
   useEffect(() => {
     saveOrders(orders)
@@ -184,14 +187,60 @@ export default function App() {
   }, [monthlyTarget])
 
   useEffect(() => {
-    if (skipNextDiskSave.current) {
-      skipNextDiskSave.current = false
+    let cancelled = false
+    async function hydrateFromCloud() {
+      setSyncState('syncing')
+      const cloud = await loadCloudStore()
+      if (cancelled) return
+      const local: CloudStore = {
+        updatedAt: new Date().toISOString(),
+        monthlyTarget: loadMonthlyTarget(),
+        orders: loadOrders(),
+        history: loadHistory(),
+      }
+      if (cloud) {
+        const merged = mergeStores(local, cloud)
+        skipNextCloudSave.current = true
+        setOrders(merged.orders)
+        setHistory(merged.history)
+        setMonthlyTarget(merged.monthlyTarget)
+        setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
+        // Push merged result so all devices stay aligned
+        const ok = await saveCloudStore(merged)
+        setSyncState(ok ? 'ok' : 'error')
+        setToast('تم تحميل البيانات من السحابة')
+      } else if (local.orders.length || local.history.length) {
+        const ok = await saveCloudStore(local)
+        setSyncState(ok ? 'ok' : 'error')
+        setToast(ok ? 'تم رفع بيانات هذا الجهاز للسحابة' : 'تعذر الاتصال بالسحابة')
+      } else {
+        setSyncState('ok')
+      }
+      cloudReady.current = true
+    }
+    void hydrateFromCloud()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!cloudReady.current) return
+    if (skipNextCloudSave.current) {
+      skipNextCloudSave.current = false
       return
     }
-    // Every logged step triggers a disk backup file
-    downloadBackupToDisk(orders, history, monthlyTarget)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [history])
+    const store: CloudStore = {
+      updatedAt: new Date().toISOString(),
+      monthlyTarget,
+      orders,
+      history,
+    }
+    setSyncState('syncing')
+    void saveCloudStore(store).then((ok) => {
+      setSyncState(ok ? 'ok' : 'error')
+    })
+  }, [orders, history, monthlyTarget])
 
   useEffect(() => {
     if (!toast) return
@@ -221,6 +270,26 @@ export default function App() {
   function saveToDiskManual() {
     downloadBackupToDisk(orders, history, monthlyTarget)
     setToast('تم حفظ نسخة على القرص')
+  }
+
+  async function syncNow() {
+    setSyncState('syncing')
+    const cloud = await loadCloudStore()
+    const local: CloudStore = {
+      updatedAt: new Date().toISOString(),
+      monthlyTarget,
+      orders,
+      history,
+    }
+    const merged = cloud ? mergeStores(local, cloud) : local
+    skipNextCloudSave.current = true
+    setOrders(merged.orders)
+    setHistory(merged.history)
+    setMonthlyTarget(merged.monthlyTarget)
+    setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
+    const ok = await saveCloudStore(merged)
+    setSyncState(ok ? 'ok' : 'error')
+    setToast(ok ? 'تمت المزامنة مع السحابة' : 'فشلت المزامنة')
   }
 
   const dateFiltered = orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter))
@@ -469,6 +538,21 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <span
+            className={`sync-badge sync-${syncState}`}
+            title="حالة المزامنة السحابية"
+          >
+            {syncState === 'syncing'
+              ? 'جاري المزامنة...'
+              : syncState === 'ok'
+                ? 'متصل بالسحابة'
+                : syncState === 'error'
+                  ? 'السحابة غير متصلة'
+                  : 'جاهز'}
+          </span>
+          <button type="button" className="btn-ghost" onClick={() => void syncNow()}>
+            مزامنة الآن
+          </button>
           {installEvent && (
             <button
               type="button"
@@ -914,7 +998,8 @@ export default function App() {
               </button>
             </div>
             <p className="history-hint">
-              كل خطوة تُسجَّل تلقائياً ويُحفظ ملف نسخة على القرص مع كل عملية.
+              كل خطوة تُحفظ تلقائياً في السحابة، فتظهر على أي رابط أو جهاز عند فتح اللوحة.
+              يمكنك أيضاً حفظ نسخة على القرص يدوياً.
             </p>
             <div className="history-list">
               {history.length === 0 ? (

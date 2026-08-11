@@ -661,6 +661,30 @@ input {
   justify-content: center;
 }
 
+.sync-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--sand);
+  color: var(--ink-soft);
+}
+
+.sync-badge.sync-ok {
+  background: rgba(26, 122, 76, 0.14);
+  color: var(--stage-04);
+}
+
+.sync-badge.sync-syncing {
+  background: rgba(15, 92, 140, 0.14);
+  color: var(--stage-118);
+}
+
+.sync-badge.sync-error {
+  background: rgba(155, 44, 44, 0.12);
+  color: var(--danger);
+}
+
 .column-meta {
   display: flex;
   justify-content: space-between;
