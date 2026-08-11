@@ -190,15 +190,15 @@ export default function App() {
   const totalCommission = filtered.reduce((s, o) => s + o.commission, 0)
 
   const monthOrders = orders.filter((o) => matchesDateFilter(o.createdAt, 'month'))
-  const achievedOrders = monthOrders.filter((o) =>
-    TARGET_STAGES.includes(o.stage),
-  ).length
+  const achievedAmount = monthOrders
+    .filter((o) => TARGET_STAGES.includes(o.stage))
+    .reduce((sum, o) => sum + o.financeAmount, 0)
   const targetPercent =
     monthlyTarget > 0
-      ? Math.min(999, Math.round((achievedOrders / monthlyTarget) * 1000) / 10)
+      ? Math.min(999, Math.round((achievedAmount / monthlyTarget) * 1000) / 10)
       : 0
   const progressWidth =
-    monthlyTarget > 0 ? Math.min(100, (achievedOrders / monthlyTarget) * 100) : 0
+    monthlyTarget > 0 ? Math.min(100, (achievedAmount / monthlyTarget) * 100) : 0
 
   const monthName = new Intl.DateTimeFormat('ar-SA', {
     month: 'long',
@@ -208,7 +208,7 @@ export default function App() {
   function saveTarget() {
     const value = Number(targetInput)
     if (!Number.isFinite(value) || value < 0) {
-      setToast('أدخل رقم تارقت صحيح')
+      setToast('أدخل مبلغ تارقت صحيح')
       return
     }
     setMonthlyTarget(value)
@@ -394,20 +394,20 @@ export default function App() {
             <div>
               <h3>التارقت الشهري</h3>
               <p>
-                يُحسب الإنجاز من طلبات هذا الشهر في المراحل 77 و118 و120 —{' '}
-                {monthName}
+                يُحسب الإنجاز من إجمالي مبالغ التمويل لهذا الشهر في المراحل 77
+                و118 و120 — {monthName}
               </p>
             </div>
             <div className="target-input-row">
               <label>
-                المستهدف (عدد الطلبات)
+                المستهدف (مبلغ التمويل ر.س)
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={targetInput}
                   onChange={(e) => setTargetInput(e.target.value)}
-                  placeholder="مثال: 30"
+                  placeholder="مثال: 500000"
                 />
               </label>
               <button type="button" className="btn-primary" onClick={saveTarget}>
@@ -419,11 +419,11 @@ export default function App() {
           <div className="target-metrics">
             <div className="target-metric">
               <span>المستهدف</span>
-              <strong>{formatMoney(monthlyTarget)}</strong>
+              <strong>{formatMoney(monthlyTarget)} ر.س</strong>
             </div>
             <div className="target-metric">
               <span>المتحقق (77 + 118 + 120)</span>
-              <strong>{formatMoney(achievedOrders)}</strong>
+              <strong>{formatMoney(achievedAmount)} ر.س</strong>
             </div>
             <div className="target-metric highlight">
               <span>نسبة الإنجاز</span>
@@ -439,8 +439,8 @@ export default function App() {
           </div>
           <p className="target-note">
             {monthlyTarget > 0
-              ? `تحققت ${achievedOrders} من أصل ${monthlyTarget} طلب لهذا الشهر`
-              : 'أدخل التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'}
+              ? `تحقق ${formatMoney(achievedAmount)} ر.س من أصل ${formatMoney(monthlyTarget)} ر.س لهذا الشهر`
+              : 'أدخل مبلغ التارقت الشهري ثم اضغط حفظ لبدء حساب النسبة'}
           </p>
         </section>
 
