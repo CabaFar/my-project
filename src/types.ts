@@ -1,4 +1,6 @@
-export type StageId = '04' | '77' | '118'
+export type StageId = '04' | '77' | '118' | '120'
+
+export type DateFilter = 'today' | 'week' | 'month' | 'all'
 
 export interface Order {
   id: string

@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { STAGES } from './stages'
 import { loadOrders, saveOrders } from './storage'
-import type { Order, StageId } from './types'
+import type { DateFilter, Order, StageId } from './types'
 import './App.css'
 
 const EMPTY_FORM = {
@@ -24,6 +24,123 @@ function createId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function startOfDay(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+function startOfWeek(d: Date): Date {
+  const x = startOfDay(d)
+  const day = x.getDay()
+  // Saturday as start of week (common in KSA)
+  const diff = (day + 1) % 7
+  x.setDate(x.getDate() - diff)
+  return x
+}
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
+function matchesDateFilter(createdAt: string, filter: DateFilter): boolean {
+  if (filter === 'all') return true
+  const created = new Date(createdAt)
+  if (Number.isNaN(created.getTime())) return false
+  const now = new Date()
+  if (filter === 'today') return created >= startOfDay(now)
+  if (filter === 'week') return created >= startOfWeek(now)
+  if (filter === 'month') return created >= startOfMonth(now)
+  return true
+}
+
+function IconCheck({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconFile({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconMoney({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  )
+}
+
+function IconBox({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M3 8l9 5 9-5M12 13v8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconToday({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 10h18M8 2v4M16 2v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="12" cy="15" r="1.6" fill="currentColor" />
+    </svg>
+  )
+}
+
+function IconWeek({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 10h18M8 2v4M16 2v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 14h8M8 17h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconMonth({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 10h18M8 2v4M16 2v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M7 14h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM7 17h2v2H7v-2zm4 0h2v2h-2v-2z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function IconAll({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+const STAGE_ICONS: Record<StageId, (props: { className?: string }) => ReactNode> = {
+  '04': (p) => <IconCheck {...p} />,
+  '77': (p) => <IconFile {...p} />,
+  '118': (p) => <IconMoney {...p} />,
+  '120': (p) => <IconBox {...p} />,
+}
+
+const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: string }) => ReactNode }[] = [
+  { id: 'today', label: 'اليوم', icon: (p) => <IconToday {...p} /> },
+  { id: 'week', label: 'هذا الأسبوع', icon: (p) => <IconWeek {...p} /> },
+  { id: 'month', label: 'هذا الشهر', icon: (p) => <IconMonth {...p} /> },
+  { id: 'all', label: 'الجميع', icon: (p) => <IconAll {...p} /> },
+]
+
 export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => loadOrders())
   const [form, setForm] = useState(EMPTY_FORM)
@@ -31,6 +148,9 @@ export default function App() {
   const [formOpen, setFormOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const pipelineRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     saveOrders(orders)
@@ -42,7 +162,10 @@ export default function App() {
     return () => window.clearTimeout(t)
   }, [toast])
 
-  const filtered = orders.filter((o) => {
+  const dateFiltered = orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter))
+
+  const filtered = dateFiltered.filter((o) => {
+    if (stageFilter !== 'all' && o.stage !== stageFilter) return false
     const q = search.trim().toLowerCase()
     if (!q) return true
     return (
@@ -52,8 +175,36 @@ export default function App() {
     )
   })
 
-  const totalFinance = orders.reduce((s, o) => s + o.financeAmount, 0)
-  const totalCommission = orders.reduce((s, o) => s + o.commission, 0)
+  const totalFinance = filtered.reduce((s, o) => s + o.financeAmount, 0)
+  const totalCommission = filtered.reduce((s, o) => s + o.commission, 0)
+
+  const visibleStages =
+    stageFilter === 'all' ? STAGES : STAGES.filter((s) => s.id === stageFilter)
+
+  function countByStage(stageId: StageId): number {
+    return dateFiltered.filter((o) => o.stage === stageId).length
+  }
+
+  function countByDate(filter: DateFilter): number {
+    return orders.filter((o) => matchesDateFilter(o.createdAt, filter)).length
+  }
+
+  function selectStage(id: StageId | 'all') {
+    setStageFilter(id)
+    pipelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (id === 'all') {
+      setToast('عرض جميع المراحل')
+    } else {
+      const title = STAGES.find((s) => s.id === id)?.title
+      setToast(`عرض طلبات: ${title}`)
+    }
+  }
+
+  function selectDate(id: DateFilter) {
+    setDateFilter(id)
+    const label = DATE_FILTERS.find((d) => d.id === id)?.label
+    setToast(`فلتر التاريخ: ${label}`)
+  }
 
   function resetForm() {
     setForm(EMPTY_FORM)
@@ -179,16 +330,16 @@ export default function App() {
         <section className="hero">
           <div className="hero-copy">
             <p className="eyebrow">مسار التمويل</p>
-            <h2>تابع طلبات عملائك من الموافقة حتى الصرف</h2>
+            <h2>تابع طلبات عملائك من الموافقة حتى الاستلام</h2>
             <p className="hero-sub">
               أضف رقم الطلب وبيانات العميل، ثم حرّك الطلب عبر المراحل: موافقة
-              مبدئية، عقد جاهز، وتم التمويل.
+              مبدئية، عقد جاهز، تم التمويل، وتم الاستلام.
             </p>
           </div>
           <div className="hero-stats" role="list">
             <div className="stat" role="listitem">
-              <span className="stat-label">إجمالي الطلبات</span>
-              <strong>{orders.length}</strong>
+              <span className="stat-label">الطلبات المعروضة</span>
+              <strong>{filtered.length}</strong>
             </div>
             <div className="stat" role="listitem">
               <span className="stat-label">مبلغ التمويل</span>
@@ -197,6 +348,56 @@ export default function App() {
             <div className="stat" role="listitem">
               <span className="stat-label">إجمالي العمولة</span>
               <strong>{formatMoney(totalCommission)} ر.س</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="filters-panel" aria-label="فلاتر سريعة">
+          <div className="filter-block">
+            <h3>المراحل</h3>
+            <div className="icon-grid">
+              <button
+                type="button"
+                className={`icon-tile ${stageFilter === 'all' ? 'active' : ''}`}
+                onClick={() => selectStage('all')}
+              >
+                <span className="icon-wrap">
+                  <IconAll />
+                </span>
+                <span className="icon-label">كل المراحل</span>
+                <span className="icon-count">{dateFiltered.length}</span>
+              </button>
+              {STAGES.map((stage) => (
+                <button
+                  key={stage.id}
+                  type="button"
+                  className={`icon-tile stage-${stage.id} ${stageFilter === stage.id ? 'active' : ''}`}
+                  onClick={() => selectStage(stage.id)}
+                >
+                  <span className="icon-wrap">{STAGE_ICONS[stage.id]({})}</span>
+                  <span className="icon-code">{stage.code}</span>
+                  <span className="icon-label">{stage.title}</span>
+                  <span className="icon-count">{countByStage(stage.id)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-block">
+            <h3>حسب تاريخ الإدخال</h3>
+            <div className="icon-grid date-grid">
+              {DATE_FILTERS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`icon-tile date-${item.id} ${dateFilter === item.id ? 'active' : ''}`}
+                  onClick={() => selectDate(item.id)}
+                >
+                  <span className="icon-wrap">{item.icon({})}</span>
+                  <span className="icon-label">{item.label}</span>
+                  <span className="icon-count">{countByDate(item.id)}</span>
+                </button>
+              ))}
             </div>
           </div>
         </section>
@@ -213,8 +414,12 @@ export default function App() {
           </label>
         </div>
 
-        <section className="pipeline" aria-label="مراحل الطلبات">
-          {STAGES.map((stage, index) => {
+        <section
+          className="pipeline"
+          aria-label="مراحل الطلبات"
+          ref={pipelineRef}
+        >
+          {visibleStages.map((stage, index) => {
             const stageOrders = filtered.filter((o) => o.stage === stage.id)
             const stageFinance = stageOrders.reduce(
               (s, o) => s + o.financeAmount,
@@ -224,13 +429,16 @@ export default function App() {
             return (
               <div
                 key={stage.id}
+                id={`stage-${stage.id}`}
                 className={`column column-${stage.id}`}
                 style={{ animationDelay: `${index * 80}ms` }}
               >
                 <div className="column-head">
-                  <div className="stage-code">{stage.code}</div>
+                  <div className="stage-code">{STAGE_ICONS[stage.id]({})}</div>
                   <div>
-                    <h3>{stage.title}</h3>
+                    <h3>
+                      {stage.code} — {stage.title}
+                    </h3>
                     <p>{stage.description}</p>
                   </div>
                   <span className="count">{stageOrders.length}</span>
