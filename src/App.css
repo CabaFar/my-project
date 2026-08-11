@@ -14,6 +14,7 @@
   --stage-04: #1a7a4c;
   --stage-77: #b8860b;
   --stage-118: #0f5c8c;
+  --stage-120: #6b3fa0;
   --shadow: 0 18px 50px rgba(4, 40, 24, 0.12);
   --radius: 18px;
   --font-display: 'Tajawal', sans-serif;
@@ -276,6 +277,127 @@ input {
   font-weight: 700;
 }
 
+.filters-panel {
+  display: grid;
+  gap: 1rem;
+  animation: fadeUp 0.72s ease both;
+}
+
+.filter-block {
+  background: rgba(255, 252, 247, 0.9);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.filter-block h3 {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--green-900);
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.date-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.icon-tile {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 0.55rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: white;
+  cursor: pointer;
+  color: var(--ink);
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.icon-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(4, 40, 24, 0.08);
+}
+
+.icon-tile.active {
+  border-color: var(--green-700);
+  background: var(--green-100);
+  box-shadow: 0 0 0 3px rgba(21, 122, 82, 0.12);
+}
+
+.icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--sand);
+  color: var(--green-900);
+}
+
+.icon-wrap svg {
+  width: 22px;
+  height: 22px;
+}
+
+.icon-tile.stage-04 .icon-wrap {
+  background: rgba(26, 122, 76, 0.12);
+  color: var(--stage-04);
+}
+
+.icon-tile.stage-77 .icon-wrap {
+  background: rgba(184, 134, 11, 0.14);
+  color: var(--stage-77);
+}
+
+.icon-tile.stage-118 .icon-wrap {
+  background: rgba(15, 92, 140, 0.12);
+  color: var(--stage-118);
+}
+
+.icon-tile.stage-120 .icon-wrap {
+  background: rgba(107, 63, 160, 0.12);
+  color: var(--stage-120);
+}
+
+.icon-code {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.icon-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.icon-count {
+  min-width: 1.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--sand);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.icon-tile.active .icon-count {
+  background: white;
+}
+
 .toolbar {
   animation: fadeUp 0.75s ease both;
 }
@@ -299,9 +421,10 @@ input {
 
 .pipeline {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   align-items: start;
+  scroll-margin-top: 1rem;
 }
 
 .column {
@@ -323,6 +446,10 @@ input {
 
 .column-118 {
   border-top: 4px solid var(--stage-118);
+}
+
+.column-120 {
+  border-top: 4px solid var(--stage-120);
 }
 
 .column-head {
@@ -355,6 +482,15 @@ input {
 
 .column-118 .stage-code {
   background: var(--stage-118);
+}
+
+.column-120 .stage-code {
+  background: var(--stage-120);
+}
+
+.stage-code svg {
+  width: 22px;
+  height: 22px;
 }
 
 .column-head h3 {
@@ -542,6 +678,11 @@ input {
   color: var(--stage-118);
 }
 
+.move-btn.stage-120:hover {
+  border-color: var(--stage-120);
+  color: var(--stage-120);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -675,6 +816,10 @@ input {
   color: var(--stage-118);
 }
 
+.stage-120 .opt-code {
+  color: var(--stage-120);
+}
+
 .opt-title {
   color: var(--ink);
 }
@@ -774,6 +919,16 @@ input {
   }
 }
 
+@media (max-width: 1200px) {
+  .pipeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .icon-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 980px) {
   .pipeline {
     grid-template-columns: 1fr;
@@ -781,6 +936,10 @@ input {
 
   .hero-stats {
     grid-template-columns: 1fr;
+  }
+
+  .date-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -792,6 +951,11 @@ input {
 
   .btn-primary {
     width: 100%;
+  }
+
+  .icon-grid,
+  .date-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .form-row {

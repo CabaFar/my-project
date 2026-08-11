@@ -19,4 +19,10 @@ export const STAGES: Stage[] = [
     title: 'تم التمويل',
     description: 'اكتمل التمويل وصُرف المبلغ',
   },
+  {
+    id: '120',
+    code: '120',
+    title: 'تم الاستلام',
+    description: 'تم استلام العميل / إتمام التسليم',
+  },
 ]
