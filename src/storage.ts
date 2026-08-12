@@ -3,6 +3,7 @@ import type { HistoryEntry, Order } from './types'
 const STORAGE_KEY = 'riyadh-bank-sales-orders'
 const TARGET_KEY = 'riyadh-bank-monthly-target'
 const HISTORY_KEY = 'riyadh-bank-sales-history'
+const DELETED_KEY = 'riyadh-bank-deleted-ids'
 
 export function loadOrders(): Order[] {
   try {
@@ -47,6 +48,26 @@ export function loadHistory(): HistoryEntry[] {
 
 export function saveHistory(history: HistoryEntry[]): void {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+}
+
+export function loadDeletedIds(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DELETED_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string> = {}
+    for (const [id, at] of Object.entries(parsed)) {
+      if (typeof at === 'string' && at) out[id] = at
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function saveDeletedIds(deletedIds: Record<string, string>): void {
+  localStorage.setItem(DELETED_KEY, JSON.stringify(deletedIds))
 }
 
 export function buildDiskBackup(orders: Order[], history: HistoryEntry[], target: number) {
