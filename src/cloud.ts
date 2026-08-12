@@ -9,81 +9,87 @@ export interface CloudStore {
 
 const POINTER_URL =
   'https://raw.githubusercontent.com/CabaFar/my-project/main/data/cloud-pointer.json'
-const BLOB_BASE = 'https://jsonblob.com/api/jsonBlob'
 const FALLBACK_STORE_URL =
   'https://raw.githubusercontent.com/CabaFar/my-project/main/data/sales-store.json'
+const EXTENDS_BASE = 'https://extendsclass.com/api/json-storage/bin'
 
-let cachedBlobId: string | null = null
+const LOCAL_BIN_KEY = 'riyadh-bank-cloud-bin-id'
+/** Shared ExtendsClass bin used by all devices. */
+const DEFAULT_BIN_ID = 'bcafcbb'
 
-export function getLocalBlobOverride(): string | null {
-  return localStorage.getItem('riyadh-bank-cloud-blob-id')
+let cachedBinId: string | null = null
+
+function normalizeStore(data: unknown): CloudStore | null {
+  if (!data || typeof data !== 'object') return null
+  const raw = data as Partial<CloudStore>
+  if (!Array.isArray(raw.orders) || !Array.isArray(raw.history)) return null
+  return {
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+    monthlyTarget: Number(raw.monthlyTarget) || 0,
+    orders: raw.orders,
+    history: raw.history,
+  }
 }
 
-export function applyLocalBlobOverride(): void {
-  const local = getLocalBlobOverride()
-  if (local) cachedBlobId = local
+export function getLocalBinOverride(): string | null {
+  return localStorage.getItem(LOCAL_BIN_KEY)
 }
 
-async function resolveBlobId(): Promise<string | null> {
-  // Prefer the shared GitHub pointer so all devices use the same blob
+export function applyLocalBinOverride(): void {
+  const local = getLocalBinOverride()
+  if (local) cachedBinId = local
+}
+
+async function resolveBinId(): Promise<string> {
   try {
     const res = await fetch(`${POINTER_URL}?t=${Date.now()}`, { cache: 'no-store' })
     if (res.ok) {
-      const data = (await res.json()) as { blobId?: string }
-      if (data.blobId) {
-        cachedBlobId = data.blobId
-        localStorage.setItem('riyadh-bank-cloud-blob-id', data.blobId)
-        return data.blobId
+      const data = (await res.json()) as {
+        binId?: string
+        provider?: string
+      }
+      if (data.binId) {
+        cachedBinId = data.binId
+        localStorage.setItem(LOCAL_BIN_KEY, data.binId)
+        return data.binId
       }
     }
   } catch {
-    // ignore
+    // ignore — fall back to local/default
   }
 
-  applyLocalBlobOverride()
-  return cachedBlobId
+  applyLocalBinOverride()
+  return cachedBinId || DEFAULT_BIN_ID
 }
 
-export async function loadCloudStore(): Promise<CloudStore | null> {
-  const blobId = await resolveBlobId()
-  if (blobId) {
-    try {
-      const res = await fetch(`${BLOB_BASE}/${blobId}?t=${Date.now()}`, {
-        cache: 'no-store',
-        headers: { Accept: 'application/json' },
-      })
-      if (res.ok) {
-        const data = (await res.json()) as CloudStore
-        if (data && Array.isArray(data.orders) && Array.isArray(data.history)) {
-          return {
-            updatedAt: data.updatedAt || new Date().toISOString(),
-            monthlyTarget: Number(data.monthlyTarget) || 0,
-            orders: data.orders,
-            history: data.history,
-          }
-        }
-      }
-    } catch {
-      // fall through to GitHub backup
-    }
+async function loadFromExtendsClass(binId: string): Promise<CloudStore | null> {
+  try {
+    const res = await fetch(`${EXTENDS_BASE}/${binId}?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    return normalizeStore(await res.json())
+  } catch {
+    return null
   }
+}
 
+async function loadFromGitHubBackup(): Promise<CloudStore | null> {
   try {
     const res = await fetch(`${FALLBACK_STORE_URL}?t=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return null
-    const data = (await res.json()) as CloudStore
-    if (data && Array.isArray(data.orders) && Array.isArray(data.history)) {
-      return {
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        monthlyTarget: Number(data.monthlyTarget) || 0,
-        orders: data.orders,
-        history: data.history,
-      }
-    }
+    return normalizeStore(await res.json())
   } catch {
-    // ignore
+    return null
   }
-  return null
+}
+
+export async function loadCloudStore(): Promise<CloudStore | null> {
+  const binId = await resolveBinId()
+  const primary = await loadFromExtendsClass(binId)
+  if (primary) return primary
+  return loadFromGitHubBackup()
 }
 
 export async function saveCloudStore(store: CloudStore): Promise<boolean> {
@@ -91,12 +97,10 @@ export async function saveCloudStore(store: CloudStore): Promise<boolean> {
     ...store,
     updatedAt: new Date().toISOString(),
   }
-
-  const blobId = await resolveBlobId()
-  if (!blobId) return false
+  const binId = await resolveBinId()
 
   try {
-    const res = await fetch(`${BLOB_BASE}/${blobId}`, {
+    const res = await fetch(`${EXTENDS_BASE}/${binId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +108,15 @@ export async function saveCloudStore(store: CloudStore): Promise<boolean> {
       },
       body: JSON.stringify(payload),
     })
-    return res.ok
+    if (!res.ok) return false
+    try {
+      const body = (await res.json()) as { status?: number }
+      if (typeof body.status === 'number' && body.status !== 0) return false
+    } catch {
+      // empty body is fine
+    }
+    localStorage.setItem(LOCAL_BIN_KEY, binId)
+    return true
   } catch {
     return false
   }
