@@ -208,7 +208,11 @@ export default function App() {
         // Push merged result so all devices stay aligned
         const ok = await saveCloudStore(merged)
         setSyncState(ok ? 'ok' : 'error')
-        setToast('تم تحميل البيانات من السحابة')
+        setToast(
+          ok
+            ? 'تم تحميل البيانات من السحابة'
+            : 'تم التحميل من السحابة، لكن تعذر الحفظ — اضغط مزامنة الآن',
+        )
       } else if (local.orders.length || local.history.length) {
         const ok = await saveCloudStore(local)
         setSyncState(ok ? 'ok' : 'error')
