@@ -2,14 +2,21 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { STAGES } from './stages'
 import {
   downloadBackupToDisk,
+  loadDeletedIds,
   loadHistory,
   loadMonthlyTarget,
   loadOrders,
+  saveDeletedIds,
   saveHistory,
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
-import { loadCloudStore, mergeStores, saveCloudStore, type CloudStore } from './cloud'
+import {
+  loadCloudStore,
+  mergeStores,
+  syncWithCloud,
+  type CloudStore,
+} from './cloud'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
 import './App.css'
 
@@ -155,6 +162,7 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 export default function App() {
   const [orders, setOrders] = useState<Order[]>(() => loadOrders())
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
+  const [deletedIds, setDeletedIds] = useState<Record<string, string>>(() => loadDeletedIds())
   const [monthlyTarget, setMonthlyTarget] = useState<number>(() => loadMonthlyTarget())
   const [targetInput, setTargetInput] = useState(() => {
     const saved = loadMonthlyTarget()
@@ -173,6 +181,35 @@ export default function App() {
   const pipelineRef = useRef<HTMLElement | null>(null)
   const skipNextCloudSave = useRef(true)
   const cloudReady = useRef(false)
+  const ordersRef = useRef(orders)
+  const historyRef = useRef(history)
+  const deletedIdsRef = useRef(deletedIds)
+  const monthlyTargetRef = useRef(monthlyTarget)
+  const hydrateToastShown = useRef(false)
+
+  ordersRef.current = orders
+  historyRef.current = history
+  deletedIdsRef.current = deletedIds
+  monthlyTargetRef.current = monthlyTarget
+
+  function currentLocalStore(): CloudStore {
+    return {
+      updatedAt: new Date().toISOString(),
+      monthlyTarget: monthlyTargetRef.current,
+      orders: ordersRef.current,
+      history: historyRef.current,
+      deletedIds: deletedIdsRef.current,
+    }
+  }
+
+  function applyStore(store: CloudStore, opts?: { skipSave?: boolean }) {
+    if (opts?.skipSave) skipNextCloudSave.current = true
+    setOrders(store.orders)
+    setHistory(store.history)
+    setDeletedIds(store.deletedIds || {})
+    setMonthlyTarget(store.monthlyTarget)
+    setTargetInput(store.monthlyTarget > 0 ? String(store.monthlyTarget) : '')
+  }
 
   useEffect(() => {
     saveOrders(orders)
@@ -183,8 +220,42 @@ export default function App() {
   }, [history])
 
   useEffect(() => {
+    saveDeletedIds(deletedIds)
+  }, [deletedIds])
+
+  useEffect(() => {
     saveMonthlyTarget(monthlyTarget)
   }, [monthlyTarget])
+
+  async function runSync(options?: { silent?: boolean; pullOnly?: boolean }) {
+    setSyncState('syncing')
+    const local = currentLocalStore()
+    if (options?.pullOnly) {
+      const cloud = await loadCloudStore()
+      if (!cloud) {
+        setSyncState('error')
+        if (!options.silent) setToast('تعذر الاتصال بالسحابة')
+        return false
+      }
+      const merged = mergeStores(local, cloud)
+      applyStore(merged, { skipSave: true })
+      const result = await syncWithCloud(merged)
+      if (result.ok) applyStore(result.store, { skipSave: true })
+      setSyncState(result.ok ? 'ok' : 'error')
+      return result.ok
+    }
+
+    const result = await syncWithCloud(local)
+    if (result.ok) {
+      // Apply merged cloud result so other-device changes appear here too
+      applyStore(result.store, { skipSave: true })
+      setSyncState('ok')
+      return true
+    }
+    setSyncState('error')
+    if (!options?.silent) setToast('تعذر الحفظ في السحابة — سيُعاد المحاولة تلقائياً')
+    return false
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -197,26 +268,35 @@ export default function App() {
         monthlyTarget: loadMonthlyTarget(),
         orders: loadOrders(),
         history: loadHistory(),
+        deletedIds: loadDeletedIds(),
       }
       if (cloud) {
         const merged = mergeStores(local, cloud)
-        skipNextCloudSave.current = true
-        setOrders(merged.orders)
-        setHistory(merged.history)
-        setMonthlyTarget(merged.monthlyTarget)
-        setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
-        // Push merged result so all devices stay aligned
-        const ok = await saveCloudStore(merged)
-        setSyncState(ok ? 'ok' : 'error')
-        setToast(
-          ok
-            ? 'تم تحميل البيانات من السحابة'
-            : 'تم التحميل من السحابة، لكن تعذر الحفظ — اضغط مزامنة الآن',
-        )
+        applyStore(merged, { skipSave: true })
+        const result = await syncWithCloud(merged)
+        if (cancelled) return
+        if (result.ok) applyStore(result.store, { skipSave: true })
+        setSyncState(result.ok ? 'ok' : 'error')
+        if (!hydrateToastShown.current) {
+          hydrateToastShown.current = true
+          setToast(
+            result.ok
+              ? 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
+              : 'تم التحميل، لكن الحفظ السحابي متأخر — سيُعاد تلقائياً',
+          )
+        }
       } else if (local.orders.length || local.history.length) {
-        const ok = await saveCloudStore(local)
-        setSyncState(ok ? 'ok' : 'error')
-        setToast(ok ? 'تم رفع بيانات هذا الجهاز للسحابة' : 'تعذر الاتصال بالسحابة')
+        const result = await syncWithCloud(local)
+        if (cancelled) return
+        setSyncState(result.ok ? 'ok' : 'error')
+        if (!hydrateToastShown.current) {
+          hydrateToastShown.current = true
+          setToast(
+            result.ok
+              ? 'تم رفع بيانات هذا الجهاز — الحفظ التلقائي مفعّل'
+              : 'تعذر الاتصال بالسحابة — سيُعاد الحفظ تلقائياً',
+          )
+        }
       } else {
         setSyncState('ok')
       }
@@ -228,27 +308,47 @@ export default function App() {
     }
   }, [])
 
+  // Auto-save every change to the shared cloud (debounced + merge-safe)
   useEffect(() => {
     if (!cloudReady.current) return
     if (skipNextCloudSave.current) {
       skipNextCloudSave.current = false
       return
     }
-    const store: CloudStore = {
-      updatedAt: new Date().toISOString(),
-      monthlyTarget,
-      orders,
-      history,
+    const timer = window.setTimeout(() => {
+      void runSync({ silent: true })
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [orders, history, monthlyTarget, deletedIds])
+
+  // Keep devices aligned while the board stays open
+  useEffect(() => {
+    const tick = () => {
+      if (!cloudReady.current) return
+      if (document.visibilityState !== 'visible') return
+      void runSync({ silent: true })
     }
-    setSyncState('syncing')
-    void saveCloudStore(store).then((ok) => {
-      setSyncState(ok ? 'ok' : 'error')
-    })
-  }, [orders, history, monthlyTarget])
+    const interval = window.setInterval(tick, 25000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    const onOnline = () => {
+      void runSync({ silent: false })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', tick)
+    window.addEventListener('online', onOnline)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', tick)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [])
 
   useEffect(() => {
     if (!toast) return
-    const t = window.setTimeout(() => setToast(null), 2600)
+    const t = window.setTimeout(() => setToast(null), 2800)
     return () => window.clearTimeout(t)
   }, [toast])
 
@@ -277,23 +377,8 @@ export default function App() {
   }
 
   async function syncNow() {
-    setSyncState('syncing')
-    const cloud = await loadCloudStore()
-    const local: CloudStore = {
-      updatedAt: new Date().toISOString(),
-      monthlyTarget,
-      orders,
-      history,
-    }
-    const merged = cloud ? mergeStores(local, cloud) : local
-    skipNextCloudSave.current = true
-    setOrders(merged.orders)
-    setHistory(merged.history)
-    setMonthlyTarget(merged.monthlyTarget)
-    setTargetInput(merged.monthlyTarget > 0 ? String(merged.monthlyTarget) : '')
-    const ok = await saveCloudStore(merged)
-    setSyncState(ok ? 'ok' : 'error')
-    setToast(ok ? 'تمت المزامنة مع السحابة' : 'فشلت المزامنة')
+    const ok = await runSync({ silent: false })
+    setToast(ok ? 'تمت المزامنة — بياناتك على كل الأجهزة' : 'فشلت المزامنة — أعد المحاولة')
   }
 
   const dateFiltered = orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter))
@@ -490,6 +575,8 @@ export default function App() {
 
   function deleteOrder(id: string) {
     const current = orders.find((o) => o.id === id)
+    const deletedAt = new Date().toISOString()
+    setDeletedIds((prev) => ({ ...prev, [id]: deletedAt }))
     setOrders((prev) => prev.filter((o) => o.id !== id))
     logHistory({
       action: 'delete',
@@ -517,6 +604,12 @@ export default function App() {
       `حذف جميع طلبات مرحلة ${stageId} — ${title}؟\nعدد الطلبات: ${stageOrders.length}`,
     )
     if (!ok) return
+    const deletedAt = new Date().toISOString()
+    setDeletedIds((prev) => {
+      const next = { ...prev }
+      for (const o of stageOrders) next[o.id] = deletedAt
+      return next
+    })
     setOrders((prev) => prev.filter((o) => o.stage !== stageId))
     logHistory({
       action: 'delete_stage',
@@ -547,11 +640,11 @@ export default function App() {
             title="حالة المزامنة السحابية"
           >
             {syncState === 'syncing'
-              ? 'جاري المزامنة...'
+              ? 'جاري الحفظ...'
               : syncState === 'ok'
-                ? 'متصل بالسحابة'
+                ? 'محفوظ على كل الأجهزة'
                 : syncState === 'error'
-                  ? 'السحابة غير متصلة'
+                  ? 'سيُعاد الحفظ تلقائياً'
                   : 'جاهز'}
           </span>
           <button type="button" className="btn-ghost" onClick={() => void syncNow()}>
