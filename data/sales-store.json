@@ -1,6 +1,130 @@
 {
-  "updatedAt": "2026-08-11T17:15:00.000Z",
+  "updatedAt": "2026-08-11T18:41:39.395Z",
   "monthlyTarget": 0,
-  "orders": [],
-  "history": []
+  "orders": [
+    {
+      "id": "1786466952013-2tscx28",
+      "orderNumber": "28636328323",
+      "customerName": "عمر براهيم احمد الضعيان",
+      "showroom": "قطاف",
+      "financeAmount": 94729,
+      "commission": 2100,
+      "stage": "04",
+      "createdAt": "2026-08-11T16:49:12.012Z",
+      "updatedAt": "2026-08-11T18:17:42.602Z"
+    },
+    {
+      "id": "1786467107598-znmisx0",
+      "orderNumber": "28628166836",
+      "customerName": "احمد راكان عواد العنزي",
+      "showroom": "بترومين",
+      "financeAmount": 100000,
+      "commission": 0,
+      "stage": "04",
+      "createdAt": "2026-08-11T16:51:47.598Z",
+      "updatedAt": "2026-08-11T16:51:47.598Z"
+    },
+    {
+      "id": "1786467046496-px4akf3",
+      "orderNumber": "28446514441",
+      "customerName": "احمد عبدالرحمن علي آل فازع",
+      "showroom": "معرض القصيم",
+      "financeAmount": 166077,
+      "commission": 0,
+      "stage": "04",
+      "createdAt": "2026-08-11T16:50:46.496Z",
+      "updatedAt": "2026-08-11T16:50:46.496Z"
+    },
+    {
+      "id": "1786466307665-0xrz1ui",
+      "orderNumber": "28627136041",
+      "customerName": "مها عبدالله صالح البلوي",
+      "showroom": "معرض الجزيرة",
+      "financeAmount": 83200,
+      "commission": 0,
+      "stage": "120",
+      "createdAt": "2026-08-11T16:38:27.665Z",
+      "updatedAt": "2026-08-11T16:38:27.665Z"
+    },
+    {
+      "id": "1786466115139-esam0uf",
+      "orderNumber": "28606821850",
+      "customerName": "عائشه علي احمد بجاد",
+      "showroom": "معرض نجوم الفلاح للسيارات",
+      "financeAmount": 68075,
+      "commission": 0,
+      "stage": "120",
+      "createdAt": "2026-08-11T16:35:15.138Z",
+      "updatedAt": "2026-08-11T16:35:15.138Z"
+    },
+    {
+      "id": "1786465522094-4p0vnu9",
+      "orderNumber": "28495228071",
+      "customerName": "عيسى عبدالعزيز عيسى النعمي",
+      "showroom": "قطاف",
+      "financeAmount": 43625,
+      "commission": 0,
+      "stage": "120",
+      "createdAt": "2026-08-11T16:25:22.093Z",
+      "updatedAt": "2026-08-11T16:25:22.093Z"
+    }
+  ],
+  "history": [
+    {
+      "id": "1786472262603-7zv6gcb",
+      "at": "2026-08-11T18:17:42.603Z",
+      "action": "update",
+      "orderId": "1786466952013-2tscx28",
+      "orderNumber": "28636328323",
+      "customerName": "عمر براهيم احمد الضعيان",
+      "fromStage": "04",
+      "toStage": "04",
+      "detail": "تعديل الطلب #28636328323 — المرحلة 04"
+    },
+    {
+      "id": "1786472243415-915zo7t",
+      "at": "2026-08-11T18:17:23.415Z",
+      "action": "update",
+      "orderId": "1786466952013-2tscx28",
+      "orderNumber": "28636328323",
+      "customerName": "عمر براهيم احمد الضعيان",
+      "fromStage": "04",
+      "toStage": "04",
+      "detail": "تعديل الطلب #28636328323 — المرحلة 04"
+    },
+    {
+      "id": "1786468740199-7myxls6",
+      "at": "2026-08-11T17:19:00.199Z",
+      "action": "target",
+      "detail": "تم تحديث التارقت الشهري إلى ٢٬٥٥٠٬٠٠٠ ر.س"
+    },
+    {
+      "id": "1786468595466-ahaxock",
+      "at": "2026-08-11T17:16:35.466Z",
+      "action": "target",
+      "detail": "تم تحديث التارقت الشهري إلى ٢٬٥٥٠٬٠٠٠ ر.س"
+    },
+    {
+      "id": "1786468559345-ic4tceo",
+      "at": "2026-08-11T17:15:59.345Z",
+      "action": "target",
+      "detail": "تم تحديث التارقت الشهري إلى ٢٥٥٬٥٠٠ ر.س"
+    },
+    {
+      "id": "1786468454639-3c0qaiw",
+      "at": "2026-08-11T17:14:14.639Z",
+      "action": "delete",
+      "orderId": "1786454514032-8cozhnl",
+      "orderNumber": "100245",
+      "customerName": "محمد العتيبي",
+      "fromStage": "77",
+      "detail": "حذف الطلب #100245 من المرحلة 77"
+    },
+    {
+      "id": "1786467909575-mcxn4of",
+      "at": "2026-08-11T17:05:09.575Z",
+      "action": "target",
+      "detail": "تم تحديث التارقت الشهري إلى ٢٬٥٥٥٬٠٠٠ ر.س"
+    }
+  ]
 }
