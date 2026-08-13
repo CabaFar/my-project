@@ -31,35 +31,45 @@ function adminFees(price: number) {
 export default function FinanceCalculator() {
   const [mode, setMode] = useState<FinanceMode>('installments')
 
-  // Shared / installments fields
-  const [carPrice, setCarPrice] = useState('')
+  // Installments inputs (independent from 50-50)
+  const [instPrice, setInstPrice] = useState('')
   const [downRaw, setDownRaw] = useState('')
   const [downMode, setDownMode] = useState<AmountMode>('amount')
   const [finalRaw, setFinalRaw] = useState('')
   const [finalMode, setFinalMode] = useState<AmountMode>('amount')
-  const [margin, setMargin] = useState('')
+  const [instMargin, setInstMargin] = useState('')
   const [years, setYears] = useState('5')
   const [months, setMonths] = useState('59')
-  const [insurance, setInsurance] = useState('')
+  const [instInsurance, setInstInsurance] = useState('')
 
-  // 50-50 years
+  // 50-50 inputs (independent from installments)
+  const [ffPrice, setFfPrice] = useState('')
+  const [ffMargin, setFfMargin] = useState('')
+  const [ffInsurance, setFfInsurance] = useState('')
   const [ffYears, setFfYears] = useState<2 | 3 | 4>(2)
 
-  const price = toNumber(carPrice)
+  const price = toNumber(instPrice)
   const fees = adminFees(price)
-  const marginPct = toNumber(margin)
-  const insure = toNumber(insurance)
+  const marginPct = toNumber(instMargin)
+  const insure = toNumber(instInsurance)
+
+  const ffCarPrice = toNumber(ffPrice)
+  const ffFees = adminFees(ffCarPrice)
+  const ffMarginPct = toNumber(ffMargin)
+  const ffInsure = toNumber(ffInsurance)
 
   const installments = useMemo(() => {
     const down = resolveAmount(price, downRaw, downMode)
     const last = resolveAmount(price, finalRaw, finalMode)
     const y = Math.min(5, Math.max(1, Math.round(toNumber(years) || 1)))
     const m = Math.min(59, Math.max(1, Math.round(toNumber(months) || 1)))
+    // First payment paid by customer includes admin fees + VAT
     const firstPayment = down + fees.total
-    const financed = price - down - last
+    // Financed amount = car price - down payment only (admin fees not deducted)
+    const financed = Math.max(0, price - down)
     const profit = financed > 0 ? financed * (marginPct / 100) * y : 0
-    const monthly =
-      financed > 0 && m > 0 ? (financed + profit + insure) / m : 0
+    const monthlyBase = Math.max(0, financed - last + profit + insure)
+    const monthly = m > 0 ? monthlyBase / m : 0
     return {
       down,
       last,
@@ -69,23 +79,27 @@ export default function FinanceCalculator() {
       monthly,
       years: y,
       months: m,
-      totalPayable: financed > 0 ? financed + profit + insure + last : 0,
     }
   }, [price, downRaw, downMode, finalRaw, finalMode, years, months, marginPct, insure, fees.total])
 
   const fiftyFifty = useMemo(() => {
-    const half = price / 2
-    const firstPayment = half + fees.total + insure
-    const profit = half * (marginPct / 100) * ffYears
+    const half = ffCarPrice / 2
+    const firstPayment = half + ffFees.total + ffInsure
+    const profit = half * (ffMarginPct / 100) * ffYears
     const finalPayment = half + profit
-    return { half, firstPayment, profit, finalPayment, total: firstPayment + finalPayment }
-  }, [price, fees.total, insure, marginPct, ffYears])
+    return {
+      half,
+      firstPayment,
+      profit,
+      finalPayment,
+      total: firstPayment + finalPayment,
+    }
+  }, [ffCarPrice, ffFees.total, ffInsure, ffMarginPct, ffYears])
 
   function onYearsChange(value: string) {
     setYears(value)
     const y = Math.min(5, Math.max(1, Math.round(toNumber(value) || 1)))
     const suggested = Math.min(59, y * 12 - (y >= 5 ? 1 : 0))
-    // Keep months in sync when user changes years, but clamp to 1–59
     setMonths(String(Math.max(1, suggested || y * 12)))
   }
 
@@ -95,7 +109,8 @@ export default function FinanceCalculator() {
         <p className="eyebrow">أدوات المبيعات</p>
         <h2>حاسبة تمويل السيارات</h2>
         <p className="hero-sub">
-          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل.
+          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل. كل نظام له مدخلاته
+          المستقلة.
         </p>
       </div>
 
@@ -129,8 +144,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="1"
-                value={carPrice}
-                onChange={(e) => setCarPrice(e.target.value)}
+                value={instPrice}
+                onChange={(e) => setInstPrice(e.target.value)}
                 placeholder="مثال: 120000"
               />
             </label>
@@ -201,8 +216,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="0.01"
-                value={margin}
-                onChange={(e) => setMargin(e.target.value)}
+                value={instMargin}
+                onChange={(e) => setInstMargin(e.target.value)}
                 placeholder="مثال: 3.5"
               />
             </label>
@@ -237,8 +252,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="1"
-                value={insurance}
-                onChange={(e) => setInsurance(e.target.value)}
+                value={instInsurance}
+                onChange={(e) => setInstInsurance(e.target.value)}
                 placeholder="0"
               />
             </label>
@@ -264,8 +279,9 @@ export default function FinanceCalculator() {
             </div>
             <div className="calc-result-row">
               <span>مبلغ التمويل</span>
-              <strong>{formatMoney(Math.max(0, installments.financed))} ر.س</strong>
+              <strong>{formatMoney(installments.financed)} ر.س</strong>
             </div>
+            <p className="calc-note tiny">سعر السيارة − الدفعة الأولى (بدون الرسوم)</p>
             <div className="calc-result-row">
               <span>إجمالي الربح</span>
               <strong>{formatMoney(installments.profit)} ر.س</strong>
@@ -279,8 +295,8 @@ export default function FinanceCalculator() {
               <strong>{formatMoney(installments.monthly)} ر.س</strong>
             </div>
             <p className="calc-note">
-              القسط = (مبلغ التمويل + الربح + التأمين) ÷ عدد الأشهر.
-              الرسوم الإدارية تُضاف للدفعة الأولى مع ضريبتها.
+              مبلغ التمويل = سعر السيارة − الدفعة الأولى فقط.
+              الرسوم تُضاف للدفعة الأولى ولا تُخصم من مبلغ التمويل.
             </p>
           </aside>
         </div>
@@ -293,8 +309,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="1"
-                value={carPrice}
-                onChange={(e) => setCarPrice(e.target.value)}
+                value={ffPrice}
+                onChange={(e) => setFfPrice(e.target.value)}
                 placeholder="مثال: 120000"
               />
             </label>
@@ -321,8 +337,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="0.01"
-                value={margin}
-                onChange={(e) => setMargin(e.target.value)}
+                value={ffMargin}
+                onChange={(e) => setFfMargin(e.target.value)}
                 placeholder="مثال: 3.5"
               />
             </label>
@@ -333,8 +349,8 @@ export default function FinanceCalculator() {
                 type="number"
                 min="0"
                 step="1"
-                value={insurance}
-                onChange={(e) => setInsurance(e.target.value)}
+                value={ffInsurance}
+                onChange={(e) => setFfInsurance(e.target.value)}
                 placeholder="0"
               />
             </label>
@@ -348,7 +364,7 @@ export default function FinanceCalculator() {
             </div>
             <div className="calc-result-row">
               <span>الرسوم الإدارية + الضريبة</span>
-              <strong>{formatMoney(fees.total)} ر.س</strong>
+              <strong>{formatMoney(ffFees.total)} ر.س</strong>
             </div>
             <div className="calc-result-row highlight">
               <span>الدفعة الأولى</span>
