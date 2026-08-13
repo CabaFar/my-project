@@ -32,6 +32,7 @@ const EMPTY_FORM = {
   commission: '',
   stage: '0' as StageId,
   replied: false,
+  notes: '',
 }
 
 function formatMoney(value: number): string {
@@ -184,6 +185,7 @@ function normalizeOrder(order: Order): Order {
       ? order.stage
       : '0',
     replied: Boolean(order.replied),
+    notes: typeof order.notes === 'string' ? order.notes : '',
   }
 }
 
@@ -506,6 +508,7 @@ export default function App() {
       commission: String(order.commission),
       stage: order.stage,
       replied: Boolean(order.replied),
+      notes: order.notes || '',
     })
     setEditingId(order.id)
     setFormOpen(true)
@@ -567,6 +570,7 @@ export default function App() {
                 commission,
                 stage: form.stage,
                 replied: form.replied,
+                notes: form.notes.trim(),
                 updatedAt: now,
               }
             : o,
@@ -592,6 +596,7 @@ export default function App() {
         commission,
         stage: form.stage,
         replied: form.replied,
+        notes: form.notes.trim(),
         createdAt: now,
         updatedAt: now,
       }
@@ -1004,6 +1009,13 @@ export default function App() {
                           </div>
                         </div>
 
+                        {order.notes?.trim() ? (
+                          <p className="order-notes">
+                            <span>ملاحظة</span>
+                            {order.notes}
+                          </p>
+                        ) : null}
+
                         <div className="move">
                           <span>نقل إلى</span>
                           <div className="move-btns">
@@ -1179,6 +1191,17 @@ export default function App() {
                   </button>
                 </div>
               </fieldset>
+
+              <label>
+                ملاحظة
+                <textarea
+                  className="notes-input"
+                  rows={3}
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="اكتب أي ملاحظة عن الطلب أو العميل..."
+                />
+              </label>
 
               <div className="form-actions">
                 <button type="submit" className="btn-primary">

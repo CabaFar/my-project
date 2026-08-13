@@ -21,6 +21,8 @@ export interface Order {
   stage: StageId
   /** Whether the salesperson has replied to the customer (mainly for stage 0 inquiries). */
   replied: boolean
+  /** Free-text notes about the order / customer. */
+  notes: string
   createdAt: string
   updatedAt: string
 }
