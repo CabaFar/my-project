@@ -22,8 +22,9 @@ function resolveAmount(price: number, raw: string, mode: AmountMode): number {
   return n
 }
 
-function adminFees(price: number) {
-  const base = price * 0.005
+/** Administrative fees = 0.5% of financing amount + 15% VAT on that fee. */
+function adminFees(financeAmount: number) {
+  const base = Math.max(0, financeAmount) * 0.005
   const vat = base * 0.15
   return { base, vat, total: base + vat }
 }
@@ -49,12 +50,10 @@ export default function FinanceCalculator() {
   const [ffYears, setFfYears] = useState<2 | 3 | 4>(2)
 
   const price = toNumber(instPrice)
-  const fees = adminFees(price)
   const marginPct = toNumber(instMargin)
   const insure = toNumber(instInsurance)
 
   const ffCarPrice = toNumber(ffPrice)
-  const ffFees = adminFees(ffCarPrice)
   const ffMarginPct = toNumber(ffMargin)
   const ffInsure = toNumber(ffInsurance)
 
@@ -63,10 +62,11 @@ export default function FinanceCalculator() {
     const last = resolveAmount(price, finalRaw, finalMode)
     const y = Math.min(5, Math.max(1, Math.round(toNumber(years) || 1)))
     const m = Math.min(59, Math.max(1, Math.round(toNumber(months) || 1)))
-    // First payment paid by customer includes admin fees + VAT
-    const firstPayment = down + fees.total
     // Financed amount = car price - down payment only (admin fees not deducted)
     const financed = Math.max(0, price - down)
+    // Admin fees = 0.5% of financing amount (not car price)
+    const fees = adminFees(financed)
+    const firstPayment = down + fees.total
     const profit = financed > 0 ? financed * (marginPct / 100) * y : 0
     const monthlyBase = Math.max(0, financed - last + profit + insure)
     const monthly = m > 0 ? monthlyBase / m : 0
@@ -75,26 +75,30 @@ export default function FinanceCalculator() {
       last,
       firstPayment,
       financed,
+      fees,
       profit,
       monthly,
       years: y,
       months: m,
     }
-  }, [price, downRaw, downMode, finalRaw, finalMode, years, months, marginPct, insure, fees.total])
+  }, [price, downRaw, downMode, finalRaw, finalMode, years, months, marginPct, insure])
 
   const fiftyFifty = useMemo(() => {
     const half = ffCarPrice / 2
-    const firstPayment = half + ffFees.total + ffInsure
+    // In 50-50, financed amount is the deferred half
+    const fees = adminFees(half)
+    const firstPayment = half + fees.total + ffInsure
     const profit = half * (ffMarginPct / 100) * ffYears
     const finalPayment = half + profit
     return {
       half,
+      fees,
       firstPayment,
       profit,
       finalPayment,
       total: firstPayment + finalPayment,
     }
-  }, [ffCarPrice, ffFees.total, ffInsure, ffMarginPct, ffYears])
+  }, [ffCarPrice, ffInsure, ffMarginPct, ffYears])
 
   function onYearsChange(value: string) {
     setYears(value)
@@ -262,26 +266,26 @@ export default function FinanceCalculator() {
           <aside className="calc-results" aria-live="polite">
             <h3>نتيجة الحساب</h3>
             <div className="calc-result-row">
-              <span>الرسوم الإدارية (0.5%)</span>
-              <strong>{formatMoney(fees.base)} ر.س</strong>
+              <span>مبلغ التمويل</span>
+              <strong>{formatMoney(installments.financed)} ر.س</strong>
+            </div>
+            <p className="calc-note tiny">سعر السيارة − الدفعة الأولى (بدون الرسوم)</p>
+            <div className="calc-result-row">
+              <span>الرسوم الإدارية (0.5% من التمويل)</span>
+              <strong>{formatMoney(installments.fees.base)} ر.س</strong>
             </div>
             <div className="calc-result-row">
               <span>ضريبة الرسوم (15%)</span>
-              <strong>{formatMoney(fees.vat)} ر.س</strong>
+              <strong>{formatMoney(installments.fees.vat)} ر.س</strong>
             </div>
             <div className="calc-result-row">
               <span>إجمالي الرسوم</span>
-              <strong>{formatMoney(fees.total)} ر.س</strong>
+              <strong>{formatMoney(installments.fees.total)} ر.س</strong>
             </div>
             <div className="calc-result-row">
               <span>الدفعة الأولى (شامل الرسوم)</span>
               <strong>{formatMoney(installments.firstPayment)} ر.س</strong>
             </div>
-            <div className="calc-result-row">
-              <span>مبلغ التمويل</span>
-              <strong>{formatMoney(installments.financed)} ر.س</strong>
-            </div>
-            <p className="calc-note tiny">سعر السيارة − الدفعة الأولى (بدون الرسوم)</p>
             <div className="calc-result-row">
               <span>إجمالي الربح</span>
               <strong>{formatMoney(installments.profit)} ر.س</strong>
@@ -295,8 +299,8 @@ export default function FinanceCalculator() {
               <strong>{formatMoney(installments.monthly)} ر.س</strong>
             </div>
             <p className="calc-note">
-              مبلغ التمويل = سعر السيارة − الدفعة الأولى فقط.
-              الرسوم تُضاف للدفعة الأولى ولا تُخصم من مبلغ التمويل.
+              الرسوم الإدارية = 0.5% من مبلغ التمويل (وليس سعر السيارة)، ثم تُضاف
+              ضريبة 15% على الرسوم إلى الدفعة الأولى.
             </p>
           </aside>
         </div>
@@ -363,15 +367,16 @@ export default function FinanceCalculator() {
               <strong>{formatMoney(fiftyFifty.half)} ر.س</strong>
             </div>
             <div className="calc-result-row">
-              <span>الرسوم الإدارية + الضريبة</span>
-              <strong>{formatMoney(ffFees.total)} ر.س</strong>
+              <span>الرسوم (0.5% من التمويل + ضريبة)</span>
+              <strong>{formatMoney(fiftyFifty.fees.total)} ر.س</strong>
             </div>
             <div className="calc-result-row highlight">
               <span>الدفعة الأولى</span>
               <strong>{formatMoney(fiftyFifty.firstPayment)} ر.س</strong>
             </div>
             <p className="calc-note tiny">
-              نصف السعر + الرسوم (0.5% + ضريبة 15%) + التأمين
+              نصف السعر + رسوم 0.5% من مبلغ التمويل (النصف المؤجل) مع ضريبة 15% +
+              التأمين
             </p>
             <div className="calc-result-row">
               <span>الربح حسب المدة</span>
