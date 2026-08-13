@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-08-12T10:27:43.112Z",
-  "monthlyTarget": 2555000.0,
+  "updatedAt": "2026-08-13T09:18:00.000Z",
+  "monthlyTarget": 2555000,
   "orders": [
     {
       "id": "1786466952013-2tscx28",
@@ -11,7 +11,9 @@
       "commission": 2100,
       "stage": "04",
       "createdAt": "2026-08-11T16:49:12.012Z",
-      "updatedAt": "2026-08-11T18:17:42.602Z"
+      "updatedAt": "2026-08-11T18:17:42.602Z",
+      "replied": false,
+      "notes": ""
     },
     {
       "id": "1786467107598-znmisx0",
@@ -22,7 +24,9 @@
       "commission": 0,
       "stage": "04",
       "createdAt": "2026-08-11T16:51:47.598Z",
-      "updatedAt": "2026-08-11T16:51:47.598Z"
+      "updatedAt": "2026-08-11T16:51:47.598Z",
+      "replied": false,
+      "notes": ""
     },
     {
       "id": "1786467046496-px4akf3",
@@ -33,7 +37,9 @@
       "commission": 0,
       "stage": "04",
       "createdAt": "2026-08-11T16:50:46.496Z",
-      "updatedAt": "2026-08-11T16:50:46.496Z"
+      "updatedAt": "2026-08-11T16:50:46.496Z",
+      "replied": false,
+      "notes": ""
     },
     {
       "id": "1786466307665-0xrz1ui",
@@ -44,7 +50,9 @@
       "commission": 0,
       "stage": "120",
       "createdAt": "2026-08-11T16:38:27.665Z",
-      "updatedAt": "2026-08-11T16:38:27.665Z"
+      "updatedAt": "2026-08-11T16:38:27.665Z",
+      "replied": false,
+      "notes": ""
     },
     {
       "id": "1786466115139-esam0uf",
@@ -55,7 +63,9 @@
       "commission": 0,
       "stage": "120",
       "createdAt": "2026-08-11T16:35:15.138Z",
-      "updatedAt": "2026-08-11T16:35:15.138Z"
+      "updatedAt": "2026-08-11T16:35:15.138Z",
+      "replied": false,
+      "notes": ""
     },
     {
       "id": "1786465522094-4p0vnu9",
@@ -66,7 +76,9 @@
       "commission": 0,
       "stage": "120",
       "createdAt": "2026-08-11T16:25:22.093Z",
-      "updatedAt": "2026-08-11T16:25:22.093Z"
+      "updatedAt": "2026-08-11T16:25:22.093Z",
+      "replied": false,
+      "notes": ""
     }
   ],
   "history": [

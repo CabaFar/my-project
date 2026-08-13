@@ -16,7 +16,10 @@ const FALLBACK_STORE_URL =
 const EXTENDS_BASE = 'https://extendsclass.com/api/json-storage/bin'
 
 const LOCAL_BIN_KEY = 'riyadh-bank-cloud-bin-id'
+/** Primary shared bin */
 const DEFAULT_BIN_ID = 'bcafcbb'
+/** Secondary bin — dual-write so one CDN glitch does not lose sync */
+const BACKUP_BIN_ID = 'eaaaadb'
 
 let cachedBinId: string | null = null
 let syncChain: Promise<unknown> = Promise.resolve()
@@ -55,6 +58,21 @@ export function emptyCloudStore(): CloudStore {
     history: [],
     deletedIds: {},
   }
+}
+
+/**
+ * Build a store timestamp from actual data changes — never "now",
+ * so a quiet device cannot overwrite newer cloud values on merge.
+ */
+export function revisionFromStore(store: Omit<CloudStore, 'updatedAt'> & { updatedAt?: string }): string {
+  const times: number[] = []
+  if (store.updatedAt) times.push(new Date(store.updatedAt).getTime())
+  for (const o of store.orders) times.push(new Date(o.updatedAt).getTime())
+  for (const h of store.history) times.push(new Date(h.at).getTime())
+  for (const at of Object.values(store.deletedIds || {})) times.push(new Date(at).getTime())
+  const max = times.filter((t) => Number.isFinite(t) && t > 0)
+  if (!max.length) return new Date(0).toISOString()
+  return new Date(Math.max(...max)).toISOString()
 }
 
 async function resolveBinId(): Promise<string> {
@@ -103,42 +121,78 @@ async function loadFromGitHubBackup(): Promise<CloudStore | null> {
   }
 }
 
+function pickNewest(a: CloudStore | null, b: CloudStore | null): CloudStore | null {
+  if (!a) return b
+  if (!b) return a
+  return new Date(a.updatedAt).getTime() >= new Date(b.updatedAt).getTime() ? a : b
+}
+
 export async function loadCloudStore(): Promise<CloudStore | null> {
   const binId = await resolveBinId()
-  const primary = await loadFromExtendsClass(binId)
-  if (primary) return primary
+  const bins = Array.from(new Set([binId, DEFAULT_BIN_ID, BACKUP_BIN_ID]))
+  const loaded = await Promise.all(bins.map((id) => loadFromExtendsClass(id)))
+  let best: CloudStore | null = null
+  for (const item of loaded) best = pickNewest(best, item)
+  if (best) return best
   return loadFromGitHubBackup()
+}
+
+/**
+ * PUT with text/plain avoids browser CORS preflight.
+ * ExtendsClass OPTIONS often returns 500, which blocks application/json PUTs.
+ */
+async function putExtendsClass(binId: string, payload: CloudStore): Promise<boolean> {
+  const body = JSON.stringify(payload)
+  const attempts: Array<{ contentType: string; parseJson: boolean }> = [
+    { contentType: 'text/plain;charset=UTF-8', parseJson: true },
+    { contentType: 'text/plain', parseJson: true },
+    { contentType: 'application/json', parseJson: true },
+  ]
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(`${EXTENDS_BASE}/${binId}`, {
+        method: 'PUT',
+        mode: 'cors',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': attempt.contentType,
+          Accept: 'application/json',
+        },
+        body,
+      })
+      if (!res.ok) continue
+      if (attempt.parseJson) {
+        try {
+          const data = (await res.json()) as { status?: number }
+          if (typeof data.status === 'number' && data.status !== 0) continue
+        } catch {
+          // empty body ok
+        }
+      }
+      return true
+    } catch {
+      // try next content-type
+    }
+  }
+  return false
 }
 
 export async function saveCloudStore(store: CloudStore): Promise<boolean> {
   const payload: CloudStore = {
     ...store,
     deletedIds: store.deletedIds || {},
-    updatedAt: new Date().toISOString(),
+    updatedAt: store.updatedAt || new Date().toISOString(),
   }
-  const binId = await resolveBinId()
+  // Always stamp a fresh write time so other devices see this revision as newest
+  payload.updatedAt = new Date().toISOString()
 
-  try {
-    const res = await fetch(`${EXTENDS_BASE}/${binId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) return false
-    try {
-      const body = (await res.json()) as { status?: number }
-      if (typeof body.status === 'number' && body.status !== 0) return false
-    } catch {
-      // empty body is fine
-    }
-    localStorage.setItem(LOCAL_BIN_KEY, binId)
-    return true
-  } catch {
-    return false
-  }
+  const binId = await resolveBinId()
+  const targets = Array.from(new Set([binId, DEFAULT_BIN_ID, BACKUP_BIN_ID]))
+  const results = await Promise.all(targets.map((id) => putExtendsClass(id, payload)))
+  const ok = results.some(Boolean)
+  if (ok) localStorage.setItem(LOCAL_BIN_KEY, binId)
+  return ok
 }
 
 function laterIso(a: string | undefined, b: string | undefined): string {
@@ -166,7 +220,6 @@ export function mergeStores(local: CloudStore, cloud: CloudStore): CloudStore {
     .filter((o) => {
       const deletedAt = deletedIds[o.id]
       if (!deletedAt) return true
-      // Keep order only if it was updated after the delete (re-created / restored)
       return new Date(o.updatedAt).getTime() > new Date(deletedAt).getTime()
     })
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -182,14 +235,15 @@ export function mergeStores(local: CloudStore, cloud: CloudStore): CloudStore {
   const cloudTime = new Date(cloud.updatedAt || 0).getTime()
   const localTime = new Date(local.updatedAt || 0).getTime()
 
-  return {
-    updatedAt: new Date(Math.max(cloudTime, localTime)).toISOString(),
+  const merged: CloudStore = {
+    updatedAt: new Date(Math.max(cloudTime, localTime, Date.now())).toISOString(),
     monthlyTarget:
-      localTime >= cloudTime ? local.monthlyTarget : cloud.monthlyTarget,
+      localTime > cloudTime ? local.monthlyTarget : cloud.monthlyTarget,
     orders,
     history,
     deletedIds,
   }
+  return merged
 }
 
 export type SyncResult = { ok: boolean; store: CloudStore }
@@ -200,14 +254,32 @@ export type SyncResult = { ok: boolean; store: CloudStore }
  */
 export function syncWithCloud(local: CloudStore): Promise<SyncResult> {
   const run = async (): Promise<SyncResult> => {
-    let latest = local
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Normalize local revision so we don't pretend "now" is a data change
+    let latest: CloudStore = {
+      ...local,
+      updatedAt: revisionFromStore(local),
+    }
+    for (let attempt = 0; attempt < 4; attempt++) {
       const cloud = await loadCloudStore()
       const merged = cloud ? mergeStores(latest, cloud) : latest
       latest = merged
       const ok = await saveCloudStore(merged)
-      if (ok) return { ok: true, store: { ...merged, updatedAt: new Date().toISOString() } }
-      await delay(400 * (attempt + 1))
+      if (ok) {
+        // Verify write is readable (guards against CDN lying / silent fail)
+        await delay(150)
+        const verify = await loadCloudStore()
+        if (verify) {
+          const confirmed = mergeStores(merged, verify)
+          // If cloud lost our orders, retry
+          if (merged.orders.length > 0 && verify.orders.length === 0) {
+            await delay(300 * (attempt + 1))
+            continue
+          }
+          return { ok: true, store: confirmed }
+        }
+        return { ok: true, store: merged }
+      }
+      await delay(500 * (attempt + 1))
     }
     return { ok: false, store: latest }
   }
