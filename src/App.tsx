@@ -18,6 +18,8 @@ import {
   type CloudStore,
 } from './cloud'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
+import { countsTowardFinance } from './types'
+import FinanceCalculator from './FinanceCalculator'
 import './App.css'
 
 const TARGET_STAGES: StageId[] = ['77', '118', '120']
@@ -28,7 +30,8 @@ const EMPTY_FORM = {
   showroom: '',
   financeAmount: '',
   commission: '',
-  stage: '04' as StageId,
+  stage: '0' as StageId,
+  replied: false,
 }
 
 function formatMoney(value: number): string {
@@ -145,7 +148,22 @@ function IconAll({ className }: { className?: string }) {
   )
 }
 
+function IconNew({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
 const STAGE_ICONS: Record<StageId, (props: { className?: string }) => ReactNode> = {
+  '0': (p) => <IconNew {...p} />,
   '04': (p) => <IconCheck {...p} />,
   '77': (p) => <IconFile {...p} />,
   '118': (p) => <IconMoney {...p} />,
@@ -159,8 +177,18 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
   { id: 'all', label: 'الجميع', icon: (p) => <IconAll {...p} /> },
 ]
 
+function normalizeOrder(order: Order): Order {
+  return {
+    ...order,
+    stage: (['0', '04', '77', '118', '120'] as StageId[]).includes(order.stage)
+      ? order.stage
+      : '0',
+    replied: Boolean(order.replied),
+  }
+}
+
 export default function App() {
-  const [orders, setOrders] = useState<Order[]>(() => loadOrders())
+  const [orders, setOrders] = useState<Order[]>(() => loadOrders().map(normalizeOrder))
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
   const [deletedIds, setDeletedIds] = useState<Record<string, string>>(() => loadDeletedIds())
   const [monthlyTarget, setMonthlyTarget] = useState<number>(() => loadMonthlyTarget())
@@ -172,6 +200,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [page, setPage] = useState<'board' | 'calculator'>('board')
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
@@ -204,7 +233,7 @@ export default function App() {
 
   function applyStore(store: CloudStore, opts?: { skipSave?: boolean }) {
     if (opts?.skipSave) skipNextCloudSave.current = true
-    setOrders(store.orders)
+    setOrders(store.orders.map((o) => normalizeOrder(o as Order)))
     setHistory(store.history)
     setDeletedIds(store.deletedIds || {})
     setMonthlyTarget(store.monthlyTarget)
@@ -394,8 +423,12 @@ export default function App() {
     )
   })
 
-  const totalFinance = filtered.reduce((s, o) => s + o.financeAmount, 0)
-  const totalCommission = filtered.reduce((s, o) => s + o.commission, 0)
+  const totalFinance = filtered
+    .filter((o) => countsTowardFinance(o.stage))
+    .reduce((s, o) => s + o.financeAmount, 0)
+  const totalCommission = filtered
+    .filter((o) => countsTowardFinance(o.stage))
+    .reduce((s, o) => s + o.commission, 0)
 
   const achievedAmount = orders
     .filter((o) => TARGET_STAGES.includes(o.stage))
@@ -472,9 +505,32 @@ export default function App() {
       financeAmount: String(order.financeAmount),
       commission: String(order.commission),
       stage: order.stage,
+      replied: Boolean(order.replied),
     })
     setEditingId(order.id)
     setFormOpen(true)
+  }
+
+  function toggleReplied(order: Order) {
+    const next = !order.replied
+    const now = new Date().toISOString()
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === order.id ? { ...o, replied: next, updatedAt: now } : o,
+      ),
+    )
+    logHistory({
+      action: 'reply',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      fromStage: order.stage,
+      toStage: order.stage,
+      detail: next
+        ? `تم الرد على العميل — الطلب #${order.orderNumber}`
+        : `إلغاء علامة الرد — الطلب #${order.orderNumber}`,
+    })
+    setToast(next ? 'تم تسجيل الرد على العميل' : 'تم إلغاء علامة الرد')
   }
 
   function handleSubmit(e: FormEvent) {
@@ -510,6 +566,7 @@ export default function App() {
                 financeAmount,
                 commission,
                 stage: form.stage,
+                replied: form.replied,
                 updatedAt: now,
               }
             : o,
@@ -534,6 +591,7 @@ export default function App() {
         financeAmount,
         commission,
         stage: form.stage,
+        replied: form.replied,
         createdAt: now,
         updatedAt: now,
       }
@@ -635,6 +693,26 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <div className="page-switch" role="tablist" aria-label="أقسام اللوحة">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === 'board'}
+              className={page === 'board' ? 'active' : ''}
+              onClick={() => setPage('board')}
+            >
+              لوحة الطلبات
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === 'calculator'}
+              className={page === 'calculator' ? 'active' : ''}
+              onClick={() => setPage('calculator')}
+            >
+              حاسبة التمويل
+            </button>
+          </div>
           <span
             className={`sync-badge sync-${syncState}`}
             title="حالة المزامنة السحابية"
@@ -672,20 +750,26 @@ export default function App() {
           <button type="button" className="btn-ghost" onClick={saveToDiskManual}>
             حفظ على القرص
           </button>
-          <button type="button" className="btn-primary" onClick={openNew}>
-            + إضافة طلب
-          </button>
+          {page === 'board' && (
+            <button type="button" className="btn-primary" onClick={openNew}>
+              + إضافة طلب
+            </button>
+          )}
         </div>
       </header>
 
       <main className="main">
+        {page === 'calculator' ? (
+          <FinanceCalculator />
+        ) : (
+          <>
         <section className="hero">
           <div className="hero-copy">
             <p className="eyebrow">مسار التمويل</p>
-            <h2>تابع طلبات عملائك من الموافقة حتى الاستلام</h2>
+            <h2>تابع طلبات عملائك من الاستفسار حتى الاستلام</h2>
             <p className="hero-sub">
-              أضف رقم الطلب وبيانات العميل، ثم حرّك الطلب عبر المراحل: موافقة
-              مبدئية، عقد جاهز، تم التمويل، وتم الاستلام.
+              ابدأ من مرحلة الطلبات الجديدة (استفسارات)، ثم انقل للمرحلة 04
+              لاحتساب مبلغ التمويل، ثم عقد جاهز، تم التمويل، وتم الاستلام.
             </p>
           </div>
           <div className="hero-stats" role="list">
@@ -694,11 +778,11 @@ export default function App() {
               <strong>{filtered.length}</strong>
             </div>
             <div className="stat" role="listitem">
-              <span className="stat-label">مبلغ التمويل</span>
+              <span className="stat-label">مبلغ التمويل (من 04 فما فوق)</span>
               <strong>{formatMoney(totalFinance)} ر.س</strong>
             </div>
             <div className="stat" role="listitem">
-              <span className="stat-label">إجمالي العمولة</span>
+              <span className="stat-label">إجمالي العمولة (من 04 فما فوق)</span>
               <strong>{formatMoney(totalCommission)} ر.س</strong>
             </div>
           </div>
@@ -832,6 +916,7 @@ export default function App() {
               (s, o) => s + o.financeAmount,
               0,
             )
+            const countsFinance = countsTowardFinance(stage.id)
 
             return (
               <div
@@ -852,7 +937,11 @@ export default function App() {
                 </div>
 
                 <div className="column-meta">
-                  <span>تمويل المرحلة: {formatMoney(stageFinance)} ر.س</span>
+                  <span>
+                    {countsFinance
+                      ? `تمويل المرحلة: ${formatMoney(stageFinance)} ر.س`
+                      : `مبالغ تقديرية (لا تُحتسب): ${formatMoney(stageFinance)} ر.س`}
+                  </span>
                   <button
                     type="button"
                     className="delete-stage-btn"
@@ -894,9 +983,19 @@ export default function App() {
                         <h4>{order.customerName}</h4>
                         <p className="showroom">{order.showroom}</p>
 
+                        <button
+                          type="button"
+                          className={`reply-btn ${order.replied ? 'replied' : 'pending'}`}
+                          onClick={() => toggleReplied(order)}
+                        >
+                          {order.replied ? 'تم الرد على العميل' : 'لم يتم الرد'}
+                        </button>
+
                         <div className="amounts">
                           <div>
-                            <span>مبلغ التمويل</span>
+                            <span>
+                              {countsFinance ? 'مبلغ التمويل' : 'مبلغ تقديري'}
+                            </span>
                             <strong>{formatMoney(order.financeAmount)} ر.س</strong>
                           </div>
                           <div>
@@ -930,6 +1029,8 @@ export default function App() {
             )
           })}
         </section>
+          </>
+        )}
       </main>
 
       {formOpen && (
@@ -1050,6 +1151,32 @@ export default function App() {
                       <span className="opt-title">{s.title}</span>
                     </label>
                   ))}
+                </div>
+                {form.stage === '0' && (
+                  <p className="form-hint">
+                    مرحلة الطلبات الجديدة للاستفسارات — مبلغ التمويل لا يُحتسب في
+                    الإجمالي حتى النقل إلى 04 أو ما بعدها.
+                  </p>
+                )}
+              </fieldset>
+
+              <fieldset className="reply-picker">
+                <legend>الرد على العميل</legend>
+                <div className="calc-toggle wide">
+                  <button
+                    type="button"
+                    className={!form.replied ? 'active pending' : ''}
+                    onClick={() => setForm((f) => ({ ...f, replied: false }))}
+                  >
+                    لم يتم الرد
+                  </button>
+                  <button
+                    type="button"
+                    className={form.replied ? 'active replied' : ''}
+                    onClick={() => setForm((f) => ({ ...f, replied: true }))}
+                  >
+                    تم الرد
+                  </button>
                 </div>
               </fieldset>
 

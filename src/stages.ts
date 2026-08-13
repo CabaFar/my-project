@@ -2,6 +2,12 @@ import type { Stage } from './types'
 
 export const STAGES: Stage[] = [
   {
+    id: '0',
+    code: '0',
+    title: 'طلبات جديدة',
+    description: 'طلبات مبدئية واستفسارات — لا تُحتسب مبالغ التمويل حتى النقل لمرحلة 04',
+  },
+  {
     id: '04',
     code: '04',
     title: 'موافقة مبدئية',
