@@ -14,6 +14,7 @@ import {
 import {
   loadCloudStore,
   mergeStores,
+  revisionFromStore,
   syncWithCloud,
   type CloudStore,
 } from './cloud'
@@ -217,19 +218,31 @@ export default function App() {
   const deletedIdsRef = useRef(deletedIds)
   const monthlyTargetRef = useRef(monthlyTarget)
   const hydrateToastShown = useRef(false)
+  /** Bumps when the user actually edits data — used as local revision clock */
+  const localRevisionRef = useRef<string>(new Date(0).toISOString())
 
   ordersRef.current = orders
   historyRef.current = history
   deletedIdsRef.current = deletedIds
   monthlyTargetRef.current = monthlyTarget
 
+  function touchLocalRevision() {
+    localRevisionRef.current = new Date().toISOString()
+  }
+
   function currentLocalStore(): CloudStore {
-    return {
-      updatedAt: new Date().toISOString(),
+    const base = {
       monthlyTarget: monthlyTargetRef.current,
       orders: ordersRef.current,
       history: historyRef.current,
       deletedIds: deletedIdsRef.current,
+    }
+    return {
+      ...base,
+      updatedAt: revisionFromStore({
+        ...base,
+        updatedAt: localRevisionRef.current,
+      }),
     }
   }
 
@@ -301,8 +314,13 @@ export default function App() {
         history: loadHistory(),
         deletedIds: loadDeletedIds(),
       }
+      // Use real data revision, not "now", so empty/stale browsers don't overwrite cloud
+      const localForMerge: CloudStore = {
+        ...local,
+        updatedAt: revisionFromStore(local),
+      }
       if (cloud) {
-        const merged = mergeStores(local, cloud)
+        const merged = mergeStores(localForMerge, cloud)
         applyStore(merged, { skipSave: true })
         const result = await syncWithCloud(merged)
         if (cancelled) return
@@ -317,8 +335,9 @@ export default function App() {
           )
         }
       } else if (local.orders.length || local.history.length) {
-        const result = await syncWithCloud(local)
+        const result = await syncWithCloud(localForMerge)
         if (cancelled) return
+        if (result.ok) applyStore(result.store, { skipSave: true })
         setSyncState(result.ok ? 'ok' : 'error')
         if (!hydrateToastShown.current) {
           hydrateToastShown.current = true
@@ -346,9 +365,10 @@ export default function App() {
       skipNextCloudSave.current = false
       return
     }
+    touchLocalRevision()
     const timer = window.setTimeout(() => {
       void runSync({ silent: true })
-    }, 700)
+    }, 500)
     return () => window.clearTimeout(timer)
   }, [orders, history, monthlyTarget, deletedIds])
 
@@ -359,7 +379,7 @@ export default function App() {
       if (document.visibilityState !== 'visible') return
       void runSync({ silent: true })
     }
-    const interval = window.setInterval(tick, 25000)
+    const interval = window.setInterval(tick, 12000)
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick()
     }

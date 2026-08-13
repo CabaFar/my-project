@@ -2,7 +2,7 @@ name: Keep sales cloud alive
 
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -17,29 +17,38 @@ jobs:
         run: |
           set -euo pipefail
           POINTER=data/cloud-pointer.json
-          BIN_ID=$(python3 -c "import json; d=json.load(open('$POINTER')); print(d.get('binId') or d.get('blobId') or 'bcafcbb')")
-          echo "Using bin: $BIN_ID"
-
-          if ! curl -fsS "https://extendsclass.com/api/json-storage/bin/${BIN_ID}?t=$(date +%s)" \
-            -H 'Accept: application/json' -H 'Cache-Control: no-cache' -o /tmp/cloud.json; then
-            echo "Cloud read failed; keeping existing sales-store.json"
-            exit 0
-          fi
+          BIN_ID=$(python3 -c "import json; d=json.load(open('$POINTER')); print(d.get('binId') or 'bcafcbb')")
+          BACKUP_ID=$(python3 -c "import json; d=json.load(open('$POINTER')); print(d.get('backupBinId') or 'eaaaadb')")
+          echo "Using bins: $BIN_ID / $BACKUP_ID"
 
           python3 - <<PY
-          import json, pathlib, datetime
-          bin_id = "$BIN_ID" or "bcafcbb"
-          raw = pathlib.Path('/tmp/cloud.json').read_text()
-          try:
-            data = json.loads(raw)
-          except Exception:
-            print('Invalid JSON from cloud; abort backup')
-            raise SystemExit(0)
-          if not isinstance(data.get('orders'), list) or not isinstance(data.get('history'), list):
-            print('Cloud payload missing orders/history; abort backup')
+          import json, pathlib, datetime, urllib.request
+
+          def load_bin(bin_id: str):
+            url = f'https://extendsclass.com/api/json-storage/bin/{bin_id}?t={datetime.datetime.utcnow().timestamp()}'
+            try:
+              with urllib.request.urlopen(url, timeout=20) as r:
+                data = json.loads(r.read().decode())
+              if isinstance(data.get('orders'), list) and isinstance(data.get('history'), list):
+                return data
+            except Exception as e:
+              print('read fail', bin_id, e)
+            return None
+
+          def newer(a, b):
+            if not a: return b
+            if not b: return a
+            ta = a.get('updatedAt') or ''
+            tb = b.get('updatedAt') or ''
+            return a if ta >= tb else b
+
+          primary = load_bin("$BIN_ID")
+          backup = load_bin("$BACKUP_ID")
+          data = newer(primary, backup)
+          if not data:
+            print('Cloud read failed; keeping existing sales-store.json')
             raise SystemExit(0)
 
-          # Never replace a richer GitHub backup with a clearly emptier cloud snapshot
           existing_path = pathlib.Path('data/sales-store.json')
           if existing_path.exists():
             try:
@@ -60,17 +69,34 @@ jobs:
             data['deletedIds'] = {}
           data['monthlyTarget'] = float(data.get('monthlyTarget') or 0)
           data['updatedAt'] = data.get('updatedAt') or (datetime.datetime.utcnow().isoformat() + 'Z')
+
+          # Mirror newest snapshot to both bins
+          body = json.dumps(data, ensure_ascii=False).encode()
+          for bin_id in ["$BIN_ID", "$BACKUP_ID"]:
+            req = urllib.request.Request(
+              f'https://extendsclass.com/api/json-storage/bin/{bin_id}',
+              data=body,
+              method='PUT',
+              headers={'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json'},
+            )
+            try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                print('mirror', bin_id, r.status)
+            except Exception as e:
+              print('mirror fail', bin_id, e)
+
           pathlib.Path('data/sales-store.json').write_text(
             json.dumps(data, ensure_ascii=False, indent=2) + '\n'
           )
           pathlib.Path('data/cloud-pointer.json').write_text(
             json.dumps({
               'provider': 'extendsclass',
-              'binId': bin_id,
+              'binId': "$BIN_ID",
+              'backupBinId': "$BACKUP_ID",
               'updatedAt': datetime.datetime.utcnow().isoformat() + 'Z',
             }, indent=2) + '\n'
           )
-          print('orders', len(data['orders']), 'history', len(data['history']))
+          print('orders', len(data['orders']), 'history', len(data['history']), 'updated', data['updatedAt'])
           PY
 
           git config user.name "github-actions[bot]"

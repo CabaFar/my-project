@@ -10,6 +10,18 @@ export default defineConfig(({ command, mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
+        workbox: {
+          navigateFallback: null,
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) =>
+                url.hostname.includes('extendsclass.com') ||
+                url.hostname.includes('githubusercontent.com'),
+              handler: 'NetworkOnly',
+              method: 'GET',
+            },
+          ],
+        },
         manifest: {
           name: 'لوحة مبيعات بنك الرياض',
           short_name: 'مبيعات الرياض',
