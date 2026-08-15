@@ -16,9 +16,30 @@ export default defineConfig(({ command, mode }) => {
             {
               urlPattern: ({ url }) =>
                 url.hostname.includes('extendsclass.com') ||
-                url.hostname.includes('githubusercontent.com'),
+                url.hostname.includes('githubusercontent.com') ||
+                url.hostname.includes('supabase.co'),
               handler: 'NetworkOnly',
               method: 'GET',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'POST',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'PUT',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'PATCH',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'DELETE',
             },
           ],
         },
