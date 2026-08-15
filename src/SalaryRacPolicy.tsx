@@ -301,7 +301,10 @@ export default function SalaryRacPolicy() {
       </div>
 
       <p className="rac-footnote">
-        المصدر: New RAC — سريان فوري من 17 يونيو 2025 (للاستخدام الداخلي)
+        المصدر: New RAC — سريان فوري من 17 يونيو 2025 (للاستخدام الداخلي) —{' '}
+        <a href={`${import.meta.env.BASE_URL}rac-salary-policy.pdf`} target="_blank" rel="noreferrer">
+          تحميل الملف الأصلي
+        </a>
       </p>
     </section>
   )
