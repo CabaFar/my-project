@@ -406,7 +406,7 @@ export default function App() {
     }
   }, [])
 
-  // Instant sync when another device writes (Supabase Realtime)
+  // Instant sync when another device writes (Supabase Realtime — إن وُجد)
   useEffect(() => {
     if (!auth.configured || !auth.session) return
     const unsub = subscribeRemoteStore((remote) => {
@@ -766,24 +766,23 @@ export default function App() {
           </div>
           <span
             className={`sync-badge sync-${syncState}`}
-            title={
-              auth.configured && auth.session
-                ? 'Offline-first + Supabase Realtime'
-                : 'حالة المزامنة السحابية'
-            }
+            title="حفظ محلي + مزامنة بين الأجهزة"
           >
             {auth.offline || syncState === 'offline'
               ? 'بدون إنترنت — محفوظ محليًا'
               : syncState === 'syncing'
                 ? 'جاري المزامنة...'
                 : syncState === 'ok'
-                  ? auth.configured && auth.session
-                    ? 'متزامن على كل الأجهزة'
-                    : 'محفوظ على كل الأجهزة'
+                  ? 'متزامن على كل الأجهزة'
                   : syncState === 'error'
                     ? 'سيُعاد الحفظ تلقائياً'
                     : 'جاهز'}
           </span>
+          {auth.username && (
+            <span className="sync-badge sync-ok" title="المستخدم الحالي">
+              {auth.username}
+            </span>
+          )}
           <button type="button" className="btn-ghost" onClick={() => void syncNow()}>
             مزامنة الآن
           </button>
