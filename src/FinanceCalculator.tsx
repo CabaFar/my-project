@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import SalaryRacPolicy from './SalaryRacPolicy'
 
 type FinanceMode = 'installments' | 'fiftyfifty'
 type AmountMode = 'amount' | 'percent'
@@ -395,6 +396,8 @@ export default function FinanceCalculator() {
           </aside>
         </div>
       )}
+
+      <SalaryRacPolicy />
     </section>
   )
 }
