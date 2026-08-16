@@ -11,13 +11,9 @@ import {
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
-import {
-  loadCloudStore,
-  mergeStores,
-  revisionFromStore,
-  syncWithCloud,
-  type CloudStore,
-} from './cloud'
+import { isStoreEmpty, mergeStores, revisionFromStore, type CloudStore } from './cloud'
+import { loadRemoteStore, subscribeRemoteStore, syncRemoteStore } from './remoteSync'
+import { useAuth } from './AuthGate'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
 import { countsTowardFinance } from './types'
 import FinanceCalculator from './FinanceCalculator'
@@ -191,6 +187,7 @@ function normalizeOrder(order: Order): Order {
 }
 
 export default function App() {
+  const auth = useAuth()
   const [orders, setOrders] = useState<Order[]>(() => loadOrders().map(normalizeOrder))
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadHistory())
   const [deletedIds, setDeletedIds] = useState<Record<string, string>>(() => loadDeletedIds())
@@ -209,7 +206,7 @@ export default function App() {
   const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
   const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null)
-  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error' | 'offline'>('idle')
   const pipelineRef = useRef<HTMLElement | null>(null)
   const skipNextCloudSave = useRef(true)
   const cloudReady = useRef(false)
@@ -272,31 +269,51 @@ export default function App() {
   }, [monthlyTarget])
 
   async function runSync(options?: { silent?: boolean; pullOnly?: boolean }) {
+    if (!navigator.onLine) {
+      setSyncState('offline')
+      if (!options?.silent) setToast('بدون إنترنت — الحفظ على الجهاز فقط، ستُزامَن عند الاتصال')
+      return false
+    }
     setSyncState('syncing')
     const local = currentLocalStore()
     if (options?.pullOnly) {
-      const cloud = await loadCloudStore()
+      const cloud = await loadRemoteStore()
       if (!cloud) {
-        setSyncState('error')
+        setSyncState(isStoreEmpty(local) ? 'idle' : 'error')
         if (!options.silent) setToast('تعذر الاتصال بالسحابة')
         return false
       }
       const merged = mergeStores(local, cloud)
       applyStore(merged, { skipSave: true })
-      const result = await syncWithCloud(merged)
+      if (isStoreEmpty(local)) {
+        setSyncState('ok')
+        return true
+      }
+      const result = await syncRemoteStore(merged)
       if (result.ok) applyStore(result.store, { skipSave: true })
       setSyncState(result.ok ? 'ok' : 'error')
       return result.ok
     }
 
-    const result = await syncWithCloud(local)
+    // جهاز جديد فاضي: سحب فقط — لا كتابة فوق السحابة
+    if (isStoreEmpty(local)) {
+      const cloud = await loadRemoteStore()
+      if (cloud) {
+        applyStore(mergeStores(local, cloud), { skipSave: true })
+        setSyncState('ok')
+        return true
+      }
+      setSyncState('idle')
+      return false
+    }
+
+    const result = await syncRemoteStore(local)
     if (result.ok) {
-      // Apply merged cloud result so other-device changes appear here too
       applyStore(result.store, { skipSave: true })
       setSyncState('ok')
       return true
     }
-    setSyncState('error')
+    setSyncState(navigator.onLine ? 'error' : 'offline')
     if (!options?.silent) setToast('تعذر الحفظ في السحابة — سيُعاد المحاولة تلقائياً')
     return false
   }
@@ -304,51 +321,57 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     async function hydrateFromCloud() {
-      setSyncState('syncing')
-      const cloud = await loadCloudStore()
+      setSyncState(navigator.onLine ? 'syncing' : 'offline')
+      const cloud = await loadRemoteStore()
       if (cancelled) return
-      const local: CloudStore = {
-        updatedAt: new Date().toISOString(),
+      const localRaw = {
         monthlyTarget: loadMonthlyTarget(),
         orders: loadOrders(),
         history: loadHistory(),
         deletedIds: loadDeletedIds(),
       }
-      // Use real data revision, not "now", so empty/stale browsers don't overwrite cloud
       const localForMerge: CloudStore = {
-        ...local,
-        updatedAt: revisionFromStore(local),
+        ...localRaw,
+        updatedAt: revisionFromStore(localRaw),
       }
       if (cloud) {
         const merged = mergeStores(localForMerge, cloud)
         applyStore(merged, { skipSave: true })
-        const result = await syncWithCloud(merged)
-        if (cancelled) return
-        if (result.ok) applyStore(result.store, { skipSave: true })
-        setSyncState(result.ok ? 'ok' : 'error')
-        if (!hydrateToastShown.current) {
-          hydrateToastShown.current = true
-          setToast(
-            result.ok
-              ? 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
-              : 'تم التحميل، لكن الحفظ السحابي متأخر — سيُعاد تلقائياً',
-          )
+        if (isStoreEmpty(localForMerge)) {
+          setSyncState('ok')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast('تم تحميل بيانات السحابة على هذا الجهاز')
+          }
+        } else {
+          const result = await syncRemoteStore(merged)
+          if (cancelled) return
+          if (result.ok) applyStore(result.store, { skipSave: true })
+          setSyncState(result.ok ? 'ok' : navigator.onLine ? 'error' : 'offline')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast(
+              result.ok
+                ? 'تم تحميل أحدث البيانات — Offline-first مفعّل'
+                : 'تم التحميل محليًا — المزامنة السحابية متأخرة',
+            )
+          }
         }
-      } else if (local.orders.length || local.history.length) {
-        const result = await syncWithCloud(localForMerge)
+      } else if (!isStoreEmpty(localForMerge)) {
+        const result = await syncRemoteStore(localForMerge)
         if (cancelled) return
         if (result.ok) applyStore(result.store, { skipSave: true })
-        setSyncState(result.ok ? 'ok' : 'error')
+        setSyncState(result.ok ? 'ok' : navigator.onLine ? 'error' : 'offline')
         if (!hydrateToastShown.current) {
           hydrateToastShown.current = true
           setToast(
             result.ok
               ? 'تم رفع بيانات هذا الجهاز — الحفظ التلقائي مفعّل'
-              : 'تعذر الاتصال بالسحابة — سيُعاد الحفظ تلقائياً',
+              : 'العمل محليًا — ستُزامَن عند توفر الاتصال',
           )
         }
       } else {
-        setSyncState('ok')
+        setSyncState(navigator.onLine ? 'idle' : 'offline')
       }
       cloudReady.current = true
     }
@@ -384,18 +407,37 @@ export default function App() {
       if (document.visibilityState === 'visible') tick()
     }
     const onOnline = () => {
+      setSyncState('syncing')
       void runSync({ silent: false })
+    }
+    const onOffline = () => {
+      setSyncState('offline')
+      setToast('انقطع الإنترنت — التعديلات تُحفظ على الجهاز')
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', tick)
     window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
     return () => {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', tick)
       window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
     }
   }, [])
+
+  // Instant sync when another device writes (Supabase Realtime — إن وُجد)
+  useEffect(() => {
+    if (!auth.configured || !auth.session) return
+    const unsub = subscribeRemoteStore((remote) => {
+      if (!cloudReady.current) return
+      const merged = mergeStores(currentLocalStore(), remote)
+      applyStore(merged, { skipSave: true })
+      setSyncState('ok')
+    })
+    return unsub
+  }, [auth.configured, auth.session])
 
   useEffect(() => {
     if (!toast) return
@@ -428,6 +470,11 @@ export default function App() {
   }
 
   async function syncNow() {
+    if (!navigator.onLine) {
+      setSyncState('offline')
+      setToast('بدون إنترنت — البيانات محفوظة على الجهاز وستُزامَن عند الاتصال')
+      return
+    }
     const ok = await runSync({ silent: false })
     setToast(ok ? 'تمت المزامنة — بياناتك على كل الأجهزة' : 'فشلت المزامنة — أعد المحاولة')
   }
@@ -740,19 +787,37 @@ export default function App() {
           </div>
           <span
             className={`sync-badge sync-${syncState}`}
-            title="حالة المزامنة السحابية"
+            title="حفظ محلي + مزامنة بين الأجهزة"
           >
-            {syncState === 'syncing'
-              ? 'جاري الحفظ...'
-              : syncState === 'ok'
-                ? 'محفوظ على كل الأجهزة'
-                : syncState === 'error'
-                  ? 'سيُعاد الحفظ تلقائياً'
-                  : 'جاهز'}
+            {auth.offline || syncState === 'offline'
+              ? 'بدون إنترنت — محفوظ محليًا'
+              : syncState === 'syncing'
+                ? 'جاري المزامنة...'
+                : syncState === 'ok'
+                  ? 'متزامن على كل الأجهزة'
+                  : syncState === 'error'
+                    ? 'سيُعاد الحفظ تلقائياً'
+                    : 'جاهز'}
           </span>
+          {auth.username && (
+            <span className="sync-badge sync-ok" title="المستخدم الحالي">
+              {auth.username}
+            </span>
+          )}
           <button type="button" className="btn-ghost" onClick={() => void syncNow()}>
             مزامنة الآن
           </button>
+          {auth.session && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                void auth.signOut()
+              }}
+            >
+              خروج
+            </button>
+          )}
           {installEvent && (
             <button
               type="button"
