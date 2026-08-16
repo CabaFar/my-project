@@ -12,6 +12,7 @@ import {
   saveOrders,
 } from './storage'
 import {
+  isStoreEmpty,
   loadCloudStore,
   mergeStores,
   revisionFromStore,
@@ -277,16 +278,33 @@ export default function App() {
     if (options?.pullOnly) {
       const cloud = await loadCloudStore()
       if (!cloud) {
-        setSyncState('error')
+        setSyncState(isStoreEmpty(local) ? 'idle' : 'error')
         if (!options.silent) setToast('تعذر الاتصال بالسحابة')
         return false
       }
       const merged = mergeStores(local, cloud)
       applyStore(merged, { skipSave: true })
+      // جهاز فاضي: سحب فقط — لا دفع قد يصفّر السحابة
+      if (isStoreEmpty(local)) {
+        setSyncState('ok')
+        return true
+      }
       const result = await syncWithCloud(merged)
       if (result.ok) applyStore(result.store, { skipSave: true })
       setSyncState(result.ok ? 'ok' : 'error')
       return result.ok
+    }
+
+    // جهاز جديد فاضي بدون بيانات محلية: اسحب فقط ولا تكتب فوق السحابة
+    if (isStoreEmpty(local)) {
+      const cloud = await loadCloudStore()
+      if (cloud) {
+        applyStore(mergeStores(local, cloud), { skipSave: true })
+        setSyncState('ok')
+        return true
+      }
+      setSyncState('idle')
+      return false
     }
 
     const result = await syncWithCloud(local)
@@ -307,34 +325,41 @@ export default function App() {
       setSyncState('syncing')
       const cloud = await loadCloudStore()
       if (cancelled) return
-      const local: CloudStore = {
-        updatedAt: new Date().toISOString(),
+      const localRaw = {
         monthlyTarget: loadMonthlyTarget(),
         orders: loadOrders(),
         history: loadHistory(),
         deletedIds: loadDeletedIds(),
       }
-      // Use real data revision, not "now", so empty/stale browsers don't overwrite cloud
       const localForMerge: CloudStore = {
-        ...local,
-        updatedAt: revisionFromStore(local),
+        ...localRaw,
+        updatedAt: revisionFromStore(localRaw),
       }
       if (cloud) {
         const merged = mergeStores(localForMerge, cloud)
         applyStore(merged, { skipSave: true })
-        const result = await syncWithCloud(merged)
-        if (cancelled) return
-        if (result.ok) applyStore(result.store, { skipSave: true })
-        setSyncState(result.ok ? 'ok' : 'error')
-        if (!hydrateToastShown.current) {
-          hydrateToastShown.current = true
-          setToast(
-            result.ok
-              ? 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
-              : 'تم التحميل، لكن الحفظ السحابي متأخر — سيُعاد تلقائياً',
-          )
+        // جهاز فاضي يستقبل البيانات فقط — الدفع للجهاز الذي لديه إدخالات
+        if (isStoreEmpty(localForMerge)) {
+          setSyncState('ok')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast('تم تحميل بيانات السحابة على هذا الجهاز')
+          }
+        } else {
+          const result = await syncWithCloud(merged)
+          if (cancelled) return
+          if (result.ok) applyStore(result.store, { skipSave: true })
+          setSyncState(result.ok ? 'ok' : 'error')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast(
+              result.ok
+                ? 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
+                : 'تم التحميل، لكن الحفظ السحابي متأخر — سيُعاد تلقائياً',
+            )
+          }
         }
-      } else if (local.orders.length || local.history.length) {
+      } else if (!isStoreEmpty(localForMerge)) {
         const result = await syncWithCloud(localForMerge)
         if (cancelled) return
         if (result.ok) applyStore(result.store, { skipSave: true })
@@ -348,7 +373,11 @@ export default function App() {
           )
         }
       } else {
-        setSyncState('ok')
+        setSyncState('idle')
+        if (!hydrateToastShown.current) {
+          hydrateToastShown.current = true
+          setToast('بانتظار بيانات السحابة — لن يتم تصفير الطلبات من جهاز فاضي')
+        }
       }
       cloudReady.current = true
     }
