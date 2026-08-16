@@ -52,7 +52,7 @@ export function normalizeStore(data: unknown): CloudStore | null {
 
 export function emptyCloudStore(): CloudStore {
   return {
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date(0).toISOString(),
     monthlyTarget: 0,
     orders: [],
     history: [],
@@ -60,9 +60,22 @@ export function emptyCloudStore(): CloudStore {
   }
 }
 
+export function isStoreEmpty(store: CloudStore): boolean {
+  return store.orders.length === 0 && store.history.length === 0
+}
+
+function storeRichness(store: CloudStore): number {
+  return (
+    store.orders.length * 1_000_000 +
+    store.history.length * 100 +
+    Object.keys(store.deletedIds || {}).length +
+    (store.monthlyTarget > 0 ? 10 : 0)
+  )
+}
+
 /**
  * Build a store timestamp from actual data changes — never "now",
- * so a quiet device cannot overwrite newer cloud values on merge.
+ * so a quiet / empty device cannot overwrite richer cloud values.
  */
 export function revisionFromStore(store: Omit<CloudStore, 'updatedAt'> & { updatedAt?: string }): string {
   const times: number[] = []
@@ -73,6 +86,34 @@ export function revisionFromStore(store: Omit<CloudStore, 'updatedAt'> & { updat
   const max = times.filter((t) => Number.isFinite(t) && t > 0)
   if (!max.length) return new Date(0).toISOString()
   return new Date(Math.max(...max)).toISOString()
+}
+
+/**
+ * Prefer non-empty / richer stores. An empty blob with a fresh updatedAt
+ * must never beat a store that still has orders (classic cross-device wipe).
+ */
+export function pickBestStore(a: CloudStore | null, b: CloudStore | null): CloudStore | null {
+  if (!a) return b
+  if (!b) return a
+
+  const aEmpty = isStoreEmpty(a)
+  const bEmpty = isStoreEmpty(b)
+  if (aEmpty && !bEmpty) return b
+  if (bEmpty && !aEmpty) return a
+
+  const ra = storeRichness(a)
+  const rb = storeRichness(b)
+  const ta = new Date(revisionFromStore(a)).getTime()
+  const tb = new Date(revisionFromStore(b)).getTime()
+
+  // Same richness family: newer revision wins
+  if (Math.abs(ra - rb) < 1_000_000) {
+    if (ta !== tb) return ta >= tb ? a : b
+    return ra >= rb ? a : b
+  }
+
+  // Much richer store wins even if slightly older (guards empty wipe + partial bins)
+  return ra >= rb ? a : b
 }
 
 async function resolveBinId(): Promise<string> {
@@ -121,20 +162,17 @@ async function loadFromGitHubBackup(): Promise<CloudStore | null> {
   }
 }
 
-function pickNewest(a: CloudStore | null, b: CloudStore | null): CloudStore | null {
-  if (!a) return b
-  if (!b) return a
-  return new Date(a.updatedAt).getTime() >= new Date(b.updatedAt).getTime() ? a : b
-}
-
 export async function loadCloudStore(): Promise<CloudStore | null> {
   const binId = await resolveBinId()
   const bins = Array.from(new Set([binId, DEFAULT_BIN_ID, BACKUP_BIN_ID]))
   const loaded = await Promise.all(bins.map((id) => loadFromExtendsClass(id)))
   let best: CloudStore | null = null
-  for (const item of loaded) best = pickNewest(best, item)
-  if (best) return best
-  return loadFromGitHubBackup()
+  for (const item of loaded) best = pickBestStore(best, item)
+
+  // Always compare with GitHub backup — empty ExtendsClass must not hide real backup data
+  const backup = await loadFromGitHubBackup()
+  best = pickBestStore(best, backup)
+  return best
 }
 
 /**
@@ -178,14 +216,47 @@ async function putExtendsClass(binId: string, payload: CloudStore): Promise<bool
   return false
 }
 
-export async function saveCloudStore(store: CloudStore): Promise<boolean> {
+/**
+ * True when writing `next` would erase cloud orders that are not marked deleted.
+ */
+export function isDestructiveOverwrite(existing: CloudStore, next: CloudStore): boolean {
+  if (isStoreEmpty(existing)) return false
+  if (!isStoreEmpty(next) && next.orders.length >= existing.orders.length) return false
+
+  const deleted = next.deletedIds || {}
+  for (const order of existing.orders) {
+    const stillPresent = next.orders.some((o) => o.id === order.id)
+    if (stillPresent) continue
+    const deletedAt = deleted[order.id]
+    if (!deletedAt) return true
+    // Delete only counts if it happened at/after the order's last update
+    if (new Date(deletedAt).getTime() < new Date(order.updatedAt).getTime()) return true
+  }
+  return false
+}
+
+export async function saveCloudStore(
+  store: CloudStore,
+  opts?: { allowEmpty?: boolean },
+): Promise<boolean> {
   const payload: CloudStore = {
     ...store,
     deletedIds: store.deletedIds || {},
-    updatedAt: store.updatedAt || new Date().toISOString(),
+    // Revision from data only — never stamp wall-clock "now" (that made empty wipes look newest)
+    updatedAt: revisionFromStore(store),
   }
-  // Always stamp a fresh write time so other devices see this revision as newest
-  payload.updatedAt = new Date().toISOString()
+
+  // Safety net: refuse to wipe a richer cloud with an empty/sparse payload
+  if (!opts?.allowEmpty) {
+    const existing = await loadCloudStore()
+    if (existing && isDestructiveOverwrite(existing, payload)) {
+      console.warn('refusing destructive cloud overwrite', {
+        existingOrders: existing.orders.length,
+        nextOrders: payload.orders.length,
+      })
+      return false
+    }
+  }
 
   const binId = await resolveBinId()
   const targets = Array.from(new Set([binId, DEFAULT_BIN_ID, BACKUP_BIN_ID]))
@@ -232,16 +303,21 @@ export function mergeStores(local: CloudStore, cloud: CloudStore): CloudStore {
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
     .slice(0, 1000)
 
-  const cloudTime = new Date(cloud.updatedAt || 0).getTime()
-  const localTime = new Date(local.updatedAt || 0).getTime()
+  const cloudRev = revisionFromStore(cloud)
+  const localRev = revisionFromStore(local)
+  const cloudTime = new Date(cloudRev).getTime()
+  const localTime = new Date(localRev).getTime()
 
-  const merged: CloudStore = {
-    updatedAt: new Date(Math.max(cloudTime, localTime, Date.now())).toISOString(),
-    monthlyTarget:
-      localTime > cloudTime ? local.monthlyTarget : cloud.monthlyTarget,
+  const mergedBase = {
+    monthlyTarget: localTime > cloudTime ? local.monthlyTarget : cloud.monthlyTarget,
     orders,
     history,
     deletedIds,
+  }
+
+  const merged: CloudStore = {
+    ...mergedBase,
+    updatedAt: revisionFromStore(mergedBase),
   }
   return merged
 }
@@ -250,30 +326,51 @@ export type SyncResult = { ok: boolean; store: CloudStore }
 
 /**
  * Pull cloud → merge with local → push. Serialized so rapid edits don't race.
- * Retries a few times on failure.
+ * Never pushes an empty local when cloud could not be read (prevents wipe on new devices).
  */
 export function syncWithCloud(local: CloudStore): Promise<SyncResult> {
   const run = async (): Promise<SyncResult> => {
-    // Normalize local revision so we don't pretend "now" is a data change
     let latest: CloudStore = {
       ...local,
       updatedAt: revisionFromStore(local),
     }
+
     for (let attempt = 0; attempt < 4; attempt++) {
       const cloud = await loadCloudStore()
-      const merged = cloud ? mergeStores(latest, cloud) : latest
+
+      if (!cloud) {
+        // Cloud unreachable: only push if this device actually has data
+        if (isStoreEmpty(latest)) {
+          return { ok: false, store: latest }
+        }
+        const ok = await saveCloudStore(latest)
+        if (ok) return { ok: true, store: latest }
+        await delay(500 * (attempt + 1))
+        continue
+      }
+
+      const merged = mergeStores(latest, cloud)
+
+      // Extra guard: never save a merge that destroys cloud content
+      if (isDestructiveOverwrite(cloud, merged)) {
+        latest = cloud
+        return { ok: true, store: cloud }
+      }
+
       latest = merged
       const ok = await saveCloudStore(merged)
       if (ok) {
-        // Verify write is readable (guards against CDN lying / silent fail)
         await delay(150)
         const verify = await loadCloudStore()
         if (verify) {
           const confirmed = mergeStores(merged, verify)
-          // If cloud lost our orders, retry
           if (merged.orders.length > 0 && verify.orders.length === 0) {
             await delay(300 * (attempt + 1))
             continue
+          }
+          // If verify is somehow empty but merged had data, keep merged locally
+          if (isDestructiveOverwrite(merged, verify)) {
+            return { ok: true, store: merged }
           }
           return { ok: true, store: confirmed }
         }

@@ -11,7 +11,7 @@ import {
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
-import { mergeStores, revisionFromStore, type CloudStore } from './cloud'
+import { isStoreEmpty, mergeStores, revisionFromStore, type CloudStore } from './cloud'
 import { loadRemoteStore, subscribeRemoteStore, syncRemoteStore } from './remoteSync'
 import { useAuth } from './AuthGate'
 import type { DateFilter, HistoryEntry, Order, StageId } from './types'
@@ -279,21 +279,36 @@ export default function App() {
     if (options?.pullOnly) {
       const cloud = await loadRemoteStore()
       if (!cloud) {
-        setSyncState('error')
+        setSyncState(isStoreEmpty(local) ? 'idle' : 'error')
         if (!options.silent) setToast('تعذر الاتصال بالسحابة')
         return false
       }
       const merged = mergeStores(local, cloud)
       applyStore(merged, { skipSave: true })
+      if (isStoreEmpty(local)) {
+        setSyncState('ok')
+        return true
+      }
       const result = await syncRemoteStore(merged)
       if (result.ok) applyStore(result.store, { skipSave: true })
       setSyncState(result.ok ? 'ok' : 'error')
       return result.ok
     }
 
+    // جهاز جديد فاضي: سحب فقط — لا كتابة فوق السحابة
+    if (isStoreEmpty(local)) {
+      const cloud = await loadRemoteStore()
+      if (cloud) {
+        applyStore(mergeStores(local, cloud), { skipSave: true })
+        setSyncState('ok')
+        return true
+      }
+      setSyncState('idle')
+      return false
+    }
+
     const result = await syncRemoteStore(local)
     if (result.ok) {
-      // Apply merged cloud result so other-device changes appear here too
       applyStore(result.store, { skipSave: true })
       setSyncState('ok')
       return true
@@ -309,34 +324,40 @@ export default function App() {
       setSyncState(navigator.onLine ? 'syncing' : 'offline')
       const cloud = await loadRemoteStore()
       if (cancelled) return
-      const local: CloudStore = {
-        updatedAt: new Date().toISOString(),
+      const localRaw = {
         monthlyTarget: loadMonthlyTarget(),
         orders: loadOrders(),
         history: loadHistory(),
         deletedIds: loadDeletedIds(),
       }
-      // Use real data revision, not "now", so empty/stale browsers don't overwrite cloud
       const localForMerge: CloudStore = {
-        ...local,
-        updatedAt: revisionFromStore(local),
+        ...localRaw,
+        updatedAt: revisionFromStore(localRaw),
       }
       if (cloud) {
         const merged = mergeStores(localForMerge, cloud)
         applyStore(merged, { skipSave: true })
-        const result = await syncRemoteStore(merged)
-        if (cancelled) return
-        if (result.ok) applyStore(result.store, { skipSave: true })
-        setSyncState(result.ok ? 'ok' : navigator.onLine ? 'error' : 'offline')
-        if (!hydrateToastShown.current) {
-          hydrateToastShown.current = true
-          setToast(
-            result.ok
-              ? 'تم تحميل أحدث البيانات — Offline-first مفعّل'
-              : 'تم التحميل محليًا — المزامنة السحابية متأخرة',
-          )
+        if (isStoreEmpty(localForMerge)) {
+          setSyncState('ok')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast('تم تحميل بيانات السحابة على هذا الجهاز')
+          }
+        } else {
+          const result = await syncRemoteStore(merged)
+          if (cancelled) return
+          if (result.ok) applyStore(result.store, { skipSave: true })
+          setSyncState(result.ok ? 'ok' : navigator.onLine ? 'error' : 'offline')
+          if (!hydrateToastShown.current) {
+            hydrateToastShown.current = true
+            setToast(
+              result.ok
+                ? 'تم تحميل أحدث البيانات — Offline-first مفعّل'
+                : 'تم التحميل محليًا — المزامنة السحابية متأخرة',
+            )
+          }
         }
-      } else if (local.orders.length || local.history.length) {
+      } else if (!isStoreEmpty(localForMerge)) {
         const result = await syncRemoteStore(localForMerge)
         if (cancelled) return
         if (result.ok) applyStore(result.store, { skipSave: true })
@@ -350,7 +371,7 @@ export default function App() {
           )
         }
       } else {
-        setSyncState(navigator.onLine ? 'ok' : 'offline')
+        setSyncState(navigator.onLine ? 'idle' : 'offline')
       }
       cloudReady.current = true
     }
