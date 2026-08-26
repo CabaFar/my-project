@@ -3,6 +3,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    # احتياط: ينشر تلقائيًا إذا فوّت الدفع من الوكيل تشغيل الـ workflow
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
