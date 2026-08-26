@@ -1354,9 +1354,32 @@ input {
 }
 
 .calc-results h3 {
-  margin: 0 0 0.9rem;
+  margin: 0;
   font-family: var(--font-display);
   color: var(--green-900);
+}
+
+.calc-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.calc-copy-btn {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.calc-copy-feedback {
+  margin: -0.35rem 0 0.75rem;
+  color: var(--stage-04);
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .calc-result-row {
@@ -1375,6 +1398,15 @@ input {
 .calc-result-row strong {
   font-family: var(--font-display);
   color: var(--ink);
+  font-variant-numeric: lining-nums tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.calc-form input[type='number'],
+.calc-form select {
+  font-variant-numeric: lining-nums tabular-nums;
+  direction: ltr;
 }
 
 .calc-result-row.highlight {
