@@ -19,8 +19,20 @@ import {
   syncWithCloud,
   type CloudStore,
 } from './cloud'
-import type { DateFilter, HistoryEntry, Order, StageId } from './types'
-import { countsTowardFinance } from './types'
+import type {
+  DateFilter,
+  HistoryEntry,
+  InquiryStatus,
+  Order,
+  StageId,
+} from './types'
+import {
+  INQUIRY_STATUSES,
+  INQUIRY_STATUS_LABELS,
+  countsTowardFinance,
+  isInquiryStatus,
+  repliedFromInquiryStatus,
+} from './types'
 import FinanceCalculator from './FinanceCalculator'
 import './App.css'
 
@@ -33,15 +45,39 @@ const EMPTY_FORM = {
   financeAmount: '',
   commission: '',
   stage: '0' as StageId,
-  replied: false,
+  phone: '',
+  carModel: '',
+  source: '',
+  lastContactAt: '',
+  inquiryStatus: 'new' as InquiryStatus,
   notes: '',
 }
 
 function formatMoney(value: number): string {
-  return new Intl.NumberFormat('ar-SA', {
+  return new Intl.NumberFormat('en-US', {
     style: 'decimal',
     maximumFractionDigits: 0,
   }).format(value)
+}
+
+function todayDateInput(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function formatDateDisplay(value: string): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function resolveInquiryStatus(order: Partial<Order>): InquiryStatus {
+  if (isInquiryStatus(order.inquiryStatus)) return order.inquiryStatus
+  return order.replied ? 'contacted' : 'new'
 }
 
 function createId(): string {
@@ -181,12 +217,18 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 ]
 
 function normalizeOrder(order: Order): Order {
+  const inquiryStatus = resolveInquiryStatus(order)
   return {
     ...order,
     stage: (['0', '04', '77', '118', '120'] as StageId[]).includes(order.stage)
       ? order.stage
       : '0',
-    replied: Boolean(order.replied),
+    phone: typeof order.phone === 'string' ? order.phone : '',
+    carModel: typeof order.carModel === 'string' ? order.carModel : '',
+    source: typeof order.source === 'string' ? order.source : '',
+    lastContactAt: typeof order.lastContactAt === 'string' ? order.lastContactAt : '',
+    inquiryStatus,
+    replied: repliedFromInquiryStatus(inquiryStatus),
     notes: typeof order.notes === 'string' ? order.notes : '',
   }
 }
@@ -470,7 +512,10 @@ export default function App() {
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.customerName.toLowerCase().includes(q) ||
-      o.showroom.toLowerCase().includes(q)
+      o.showroom.toLowerCase().includes(q) ||
+      o.phone.toLowerCase().includes(q) ||
+      o.carModel.toLowerCase().includes(q) ||
+      o.source.toLowerCase().includes(q)
     )
   })
 
@@ -556,19 +601,34 @@ export default function App() {
       financeAmount: String(order.financeAmount),
       commission: String(order.commission),
       stage: order.stage,
-      replied: Boolean(order.replied),
+      phone: order.phone || '',
+      carModel: order.carModel || '',
+      source: order.source || '',
+      lastContactAt: order.lastContactAt || '',
+      inquiryStatus: resolveInquiryStatus(order),
       notes: order.notes || '',
     })
     setEditingId(order.id)
     setFormOpen(true)
   }
 
-  function toggleReplied(order: Order) {
-    const next = !order.replied
+  function setOrderInquiryStatus(order: Order, status: InquiryStatus) {
     const now = new Date().toISOString()
+    const lastContactAt =
+      status === 'new'
+        ? order.lastContactAt
+        : order.lastContactAt || todayDateInput()
     setOrders((prev) =>
       prev.map((o) =>
-        o.id === order.id ? { ...o, replied: next, updatedAt: now } : o,
+        o.id === order.id
+          ? {
+              ...o,
+              inquiryStatus: status,
+              replied: repliedFromInquiryStatus(status),
+              lastContactAt,
+              updatedAt: now,
+            }
+          : o,
       ),
     )
     logHistory({
@@ -578,11 +638,9 @@ export default function App() {
       customerName: order.customerName,
       fromStage: order.stage,
       toStage: order.stage,
-      detail: next
-        ? `تم الرد على العميل — الطلب #${order.orderNumber}`
-        : `إلغاء علامة الرد — الطلب #${order.orderNumber}`,
+      detail: `حالة الطلب #${order.orderNumber}: ${INQUIRY_STATUS_LABELS[status]}`,
     })
-    setToast(next ? 'تم تسجيل الرد على العميل' : 'تم إلغاء علامة الرد')
+    setToast(`تم تحديث الحالة: ${INQUIRY_STATUS_LABELS[status]}`)
   }
 
   function handleSubmit(e: FormEvent) {
@@ -607,6 +665,7 @@ export default function App() {
 
     if (editingId) {
       const prev = orders.find((o) => o.id === editingId)
+      const inquiryStatus = form.inquiryStatus
       setOrders((prevOrders) =>
         prevOrders.map((o) =>
           o.id === editingId
@@ -618,7 +677,12 @@ export default function App() {
                 financeAmount,
                 commission,
                 stage: form.stage,
-                replied: form.replied,
+                phone: form.phone.trim(),
+                carModel: form.carModel.trim(),
+                source: form.source.trim(),
+                lastContactAt: form.lastContactAt,
+                inquiryStatus,
+                replied: repliedFromInquiryStatus(inquiryStatus),
                 notes: form.notes.trim(),
                 updatedAt: now,
               }
@@ -636,6 +700,7 @@ export default function App() {
       })
       setToast('تم تحديث الطلب بنجاح')
     } else {
+      const inquiryStatus = form.inquiryStatus
       const newOrder: Order = {
         id: createId(),
         orderNumber: form.orderNumber.trim(),
@@ -644,7 +709,12 @@ export default function App() {
         financeAmount,
         commission,
         stage: form.stage,
-        replied: form.replied,
+        phone: form.phone.trim(),
+        carModel: form.carModel.trim(),
+        source: form.source.trim(),
+        lastContactAt: form.lastContactAt,
+        inquiryStatus,
+        replied: repliedFromInquiryStatus(inquiryStatus),
         notes: form.notes.trim(),
         createdAt: now,
         updatedAt: now,
@@ -1037,13 +1107,59 @@ export default function App() {
                         <h4>{order.customerName}</h4>
                         <p className="showroom">{order.showroom}</p>
 
-                        <button
-                          type="button"
-                          className={`reply-btn ${order.replied ? 'replied' : 'pending'}`}
-                          onClick={() => toggleReplied(order)}
-                        >
-                          {order.replied ? 'تم الرد على العميل' : 'لم يتم الرد'}
-                        </button>
+                        <div className="order-meta">
+                          {order.phone ? (
+                            <p>
+                              <span>الجوال</span>
+                              <strong lang="en" dir="ltr">
+                                {order.phone}
+                              </strong>
+                            </p>
+                          ) : null}
+                          {order.carModel ? (
+                            <p>
+                              <span>السيارة</span>
+                              <strong>{order.carModel}</strong>
+                            </p>
+                          ) : null}
+                          {order.source ? (
+                            <p>
+                              <span>المصدر</span>
+                              <strong>{order.source}</strong>
+                            </p>
+                          ) : null}
+                          <p>
+                            <span>آخر تواصل</span>
+                            <strong lang="en">{formatDateDisplay(order.lastContactAt)}</strong>
+                          </p>
+                        </div>
+
+                        {order.stage === '0' ? (
+                          <div
+                            className="inquiry-status-grid"
+                            role="group"
+                            aria-label="حالة الطلب الجديد"
+                          >
+                            {INQUIRY_STATUSES.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                className={`inquiry-status-btn status-${s.id} ${
+                                  order.inquiryStatus === s.id ? 'active' : ''
+                                }`}
+                                onClick={() => setOrderInquiryStatus(order, s.id)}
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span
+                            className={`inquiry-status-chip status-${order.inquiryStatus}`}
+                          >
+                            {INQUIRY_STATUS_LABELS[order.inquiryStatus]}
+                          </span>
+                        )}
 
                         <div className="amounts">
                           <div>
@@ -1164,12 +1280,64 @@ export default function App() {
 
               <div className="form-row">
                 <label>
+                  رقم جوال العميل
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    lang="en"
+                    dir="ltr"
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, phone: e.target.value }))
+                    }
+                    placeholder="05xxxxxxxx"
+                  />
+                </label>
+                <label>
+                  السيارة المطلوبة
+                  <input
+                    value={form.carModel}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, carModel: e.target.value }))
+                    }
+                    placeholder="مثال: كامري 2025"
+                  />
+                </label>
+              </div>
+
+              <div className="form-row">
+                <label>
+                  مصدر الطلب
+                  <input
+                    value={form.source}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, source: e.target.value }))
+                    }
+                    placeholder="مثال: معرض / إحالة / إعلان"
+                  />
+                </label>
+                <label>
+                  تاريخ آخر تواصل
+                  <input
+                    type="date"
+                    lang="en"
+                    value={form.lastContactAt}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, lastContactAt: e.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="form-row">
+                <label>
                   مبلغ التمويل (ر.س)
                   <input
                     required
                     type="number"
                     min="0"
                     step="1"
+                    lang="en"
                     value={form.financeAmount}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, financeAmount: e.target.value }))
@@ -1185,6 +1353,7 @@ export default function App() {
                     type="number"
                     min="0"
                     step="1"
+                    lang="en"
                     value={form.commission}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, commission: e.target.value }))
@@ -1221,25 +1390,34 @@ export default function App() {
                 )}
               </fieldset>
 
-              <fieldset className="reply-picker">
-                <legend>الرد على العميل</legend>
-                <div className="calc-toggle wide">
-                  <button
-                    type="button"
-                    className={!form.replied ? 'active pending' : ''}
-                    onClick={() => setForm((f) => ({ ...f, replied: false }))}
-                  >
-                    لم يتم الرد
-                  </button>
-                  <button
-                    type="button"
-                    className={form.replied ? 'active replied' : ''}
-                    onClick={() => setForm((f) => ({ ...f, replied: true }))}
-                  >
-                    تم الرد
-                  </button>
-                </div>
-              </fieldset>
+              {form.stage === '0' && (
+                <fieldset className="reply-picker">
+                  <legend>حالة الطلب الجديد</legend>
+                  <div className="inquiry-status-grid form">
+                    {INQUIRY_STATUSES.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`inquiry-status-btn status-${s.id} ${
+                          form.inquiryStatus === s.id ? 'active' : ''
+                        }`}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            inquiryStatus: s.id,
+                            lastContactAt:
+                              s.id === 'new'
+                                ? f.lastContactAt
+                                : f.lastContactAt || todayDateInput(),
+                          }))
+                        }
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
               <label>
                 ملاحظة
