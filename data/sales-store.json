@@ -1,5 +1,4 @@
 {
-  "updatedAt": "2026-08-13T09:25:00.000Z",
   "monthlyTarget": 2555000.0,
   "orders": [
     {
@@ -13,7 +12,12 @@
       "createdAt": "2026-08-11T16:49:12.012Z",
       "updatedAt": "2026-08-11T18:17:42.602Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     },
     {
       "id": "1786467107598-znmisx0",
@@ -26,7 +30,12 @@
       "createdAt": "2026-08-11T16:51:47.598Z",
       "updatedAt": "2026-08-11T16:51:47.598Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     },
     {
       "id": "1786467046496-px4akf3",
@@ -39,7 +48,12 @@
       "createdAt": "2026-08-11T16:50:46.496Z",
       "updatedAt": "2026-08-11T16:50:46.496Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     },
     {
       "id": "1786466307665-0xrz1ui",
@@ -52,7 +66,12 @@
       "createdAt": "2026-08-11T16:38:27.665Z",
       "updatedAt": "2026-08-11T16:38:27.665Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     },
     {
       "id": "1786466115139-esam0uf",
@@ -65,7 +84,12 @@
       "createdAt": "2026-08-11T16:35:15.138Z",
       "updatedAt": "2026-08-11T16:35:15.138Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     },
     {
       "id": "1786465522094-4p0vnu9",
@@ -78,7 +102,12 @@
       "createdAt": "2026-08-11T16:25:22.093Z",
       "updatedAt": "2026-08-11T16:25:22.093Z",
       "replied": false,
-      "notes": ""
+      "notes": "",
+      "phone": "",
+      "carModel": "",
+      "source": "",
+      "lastContactAt": "",
+      "inquiryStatus": "new"
     }
   ],
   "history": [
@@ -139,5 +168,6 @@
       "detail": "تم تحديث التارقت الشهري إلى ٢٬٥٥٥٬٠٠٠ ر.س"
     }
   ],
-  "deletedIds": {}
+  "deletedIds": {},
+  "updatedAt": "2026-08-11T18:17:42.603Z"
 }
