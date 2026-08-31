@@ -27,12 +27,26 @@ import type {
   StageId,
 } from './types'
 import {
+  CARRY_MONTH_STAGES,
   INQUIRY_STATUSES,
   INQUIRY_STATUS_LABELS,
+  canCarryToNextMonth,
+  canExportToExcel,
   countsTowardFinance,
   isInquiryStatus,
   repliedFromInquiryStatus,
 } from './types'
+import {
+  currentMonthKey,
+  isValidMonthKey,
+  monthLabelAr,
+  monthShortAr,
+  monthsOfYear,
+  nextMonthKey,
+  parseMonthKey,
+  toMonthKey,
+} from './months'
+import { exportOrdersToExcel } from './excelExport'
 import FinanceCalculator from './FinanceCalculator'
 import './App.css'
 
@@ -218,6 +232,9 @@ const DATE_FILTERS: { id: DateFilter; label: string; icon: (p: { className?: str
 
 function normalizeOrder(order: Order): Order {
   const inquiryStatus = resolveInquiryStatus(order)
+  const boardMonth = isValidMonthKey(order.boardMonth)
+    ? order.boardMonth
+    : toMonthKey(order.createdAt || new Date().toISOString())
   return {
     ...order,
     stage: (['0', '04', '77', '118', '120'] as StageId[]).includes(order.stage)
@@ -230,6 +247,7 @@ function normalizeOrder(order: Order): Order {
     inquiryStatus,
     replied: repliedFromInquiryStatus(inquiryStatus),
     notes: typeof order.notes === 'string' ? order.notes : '',
+    boardMonth,
   }
 }
 
@@ -251,6 +269,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [stageFilter, setStageFilter] = useState<StageId | 'all'>('all')
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const [boardYear, setBoardYear] = useState(() => new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(() => currentMonthKey())
   const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null)
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
   const pipelineRef = useRef<HTMLElement | null>(null)
@@ -503,7 +523,13 @@ export default function App() {
     setToast(ok ? 'تمت المزامنة — بياناتك على كل الأجهزة' : 'فشلت المزامنة — أعد المحاولة')
   }
 
-  const dateFiltered = orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter))
+  const yearMonths = monthsOfYear(boardYear)
+
+  const monthOrders = orders.filter((o) => o.boardMonth === selectedMonth)
+
+  const dateFiltered = monthOrders.filter((o) =>
+    matchesDateFilter(o.createdAt, dateFilter),
+  )
 
   const filtered = dateFiltered.filter((o) => {
     if (stageFilter !== 'all' && o.stage !== stageFilter) return false
@@ -526,7 +552,7 @@ export default function App() {
     .filter((o) => countsTowardFinance(o.stage))
     .reduce((s, o) => s + o.commission, 0)
 
-  const achievedAmount = orders
+  const achievedAmount = monthOrders
     .filter((o) => TARGET_STAGES.includes(o.stage))
     .reduce((sum, o) => sum + o.financeAmount, 0)
   const targetPercent =
@@ -536,10 +562,58 @@ export default function App() {
   const progressWidth =
     monthlyTarget > 0 ? Math.min(100, (achievedAmount / monthlyTarget) * 100) : 0
 
-  const monthName = new Intl.DateTimeFormat('ar-SA', {
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date())
+  const monthName = monthLabelAr(selectedMonth)
+
+  function countInMonth(monthKey: string): number {
+    return orders.filter((o) => o.boardMonth === monthKey).length
+  }
+
+  function selectBoardMonth(monthKey: string) {
+    setSelectedMonth(monthKey)
+    const { year } = parseMonthKey(monthKey)
+    setBoardYear(year)
+    setToast(`عرض طلبات: ${monthLabelAr(monthKey)}`)
+  }
+
+  function carryOrdersToNextMonth(stageIds: StageId[]) {
+    const next = nextMonthKey(selectedMonth)
+    const targets = monthOrders.filter((o) => stageIds.includes(o.stage))
+    if (targets.length === 0) {
+      setToast('لا توجد طلبات قابلة للترحيل في هذا الشهر')
+      return
+    }
+    const ok = window.confirm(
+      `ترحيل ${targets.length} طلب من (${stageIds.join(' + ')}) في ${monthLabelAr(selectedMonth)} إلى ${monthLabelAr(next)}؟`,
+    )
+    if (!ok) return
+    const now = new Date().toISOString()
+    const ids = new Set(targets.map((o) => o.id))
+    setOrders((prev) =>
+      prev.map((o) =>
+        ids.has(o.id) ? { ...o, boardMonth: next, updatedAt: now } : o,
+      ),
+    )
+    logHistory({
+      action: 'month_carry',
+      detail: `ترحيل ${targets.length} طلب (${stageIds.join(',')}) من ${monthLabelAr(selectedMonth)} إلى ${monthLabelAr(next)}`,
+    })
+    setSelectedMonth(next)
+    setBoardYear(parseMonthKey(next).year)
+    setToast(`تم الترحيل إلى ${monthLabelAr(next)}`)
+  }
+
+  function exportStageExcel(stageId: StageId) {
+    const stageOrders = filtered.filter((o) => o.stage === stageId)
+    if (stageOrders.length === 0) {
+      setToast('لا توجد طلبات للتصدير في هذه المرحلة لهذا الشهر')
+      return
+    }
+    const stamp = selectedMonth.replace('-', '')
+    exportOrdersToExcel(stageOrders, {
+      filename: `riyadh-orders-${stageId}-${stamp}.csv`,
+    })
+    setToast(`تم تصدير ${stageOrders.length} طلب من مرحلة ${stageId} إلى Excel`)
+  }
 
   function saveTarget() {
     const value = Number(targetInput)
@@ -563,7 +637,7 @@ export default function App() {
   }
 
   function countByDate(filter: DateFilter): number {
-    return orders.filter((o) => matchesDateFilter(o.createdAt, filter)).length
+    return monthOrders.filter((o) => matchesDateFilter(o.createdAt, filter)).length
   }
 
   function selectStage(id: StageId | 'all') {
@@ -684,6 +758,7 @@ export default function App() {
                 inquiryStatus,
                 replied: repliedFromInquiryStatus(inquiryStatus),
                 notes: form.notes.trim(),
+                boardMonth: o.boardMonth || selectedMonth,
                 updatedAt: now,
               }
             : o,
@@ -716,6 +791,7 @@ export default function App() {
         inquiryStatus,
         replied: repliedFromInquiryStatus(inquiryStatus),
         notes: form.notes.trim(),
+        boardMonth: selectedMonth,
         createdAt: now,
         updatedAt: now,
       }
@@ -887,6 +963,83 @@ export default function App() {
           <FinanceCalculator />
         ) : (
           <>
+        <section className="month-bar" aria-label="أشهر السنة الميلادية">
+          <div className="month-bar-head">
+            <div>
+              <h3>أشهر السنة الميلادية</h3>
+              <p>
+                عرض طلبات <strong>{monthLabelAr(selectedMonth)}</strong> — يمكنك
+                ترحيل مراحل 0 و04 و77 إلى الشهر التالي
+              </p>
+            </div>
+            <div className="month-year-switch">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  const nextYear = boardYear - 1
+                  setBoardYear(nextYear)
+                  const { month } = parseMonthKey(selectedMonth)
+                  setSelectedMonth(`${nextYear}-${String(month).padStart(2, '0')}`)
+                }}
+              >
+                ← {boardYear - 1}
+              </button>
+              <strong lang="en">{boardYear}</strong>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  const nextYear = boardYear + 1
+                  setBoardYear(nextYear)
+                  const { month } = parseMonthKey(selectedMonth)
+                  setSelectedMonth(`${nextYear}-${String(month).padStart(2, '0')}`)
+                }}
+              >
+                {boardYear + 1} →
+              </button>
+            </div>
+          </div>
+          <div className="month-grid">
+            {yearMonths.map((key) => {
+              const { month } = parseMonthKey(key)
+              const count = countInMonth(key)
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`month-tile ${selectedMonth === key ? 'active' : ''}`}
+                  onClick={() => selectBoardMonth(key)}
+                >
+                  <span className="month-name">{monthShortAr(month)}</span>
+                  <span className="month-count" lang="en">
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="month-bar-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => carryOrdersToNextMonth([...CARRY_MONTH_STAGES])}
+            >
+              ترحيل 0 + 04 + 77 إلى الشهر التالي
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                const key = currentMonthKey()
+                selectBoardMonth(key)
+              }}
+            >
+              الشهر الحالي
+            </button>
+          </div>
+        </section>
+
         <section className="hero">
           <div className="hero-copy">
             <p className="eyebrow">مسار التمويل</p>
@@ -1066,14 +1219,36 @@ export default function App() {
                       ? `تمويل المرحلة: ${formatMoney(stageFinance)} ر.س`
                       : `مبالغ تقديرية (لا تُحتسب): ${formatMoney(stageFinance)} ر.س`}
                   </span>
-                  <button
-                    type="button"
-                    className="delete-stage-btn"
-                    onClick={() => deleteAllInStage(stage.id)}
-                    disabled={stageOrders.length === 0}
-                  >
-                    حذف الكل
-                  </button>
+                  <div className="column-meta-actions">
+                    {canExportToExcel(stage.id) && (
+                      <button
+                        type="button"
+                        className="export-stage-btn"
+                        onClick={() => exportStageExcel(stage.id)}
+                        disabled={stageOrders.length === 0}
+                      >
+                        تصدير Excel
+                      </button>
+                    )}
+                    {canCarryToNextMonth(stage.id) && (
+                      <button
+                        type="button"
+                        className="carry-stage-btn"
+                        onClick={() => carryOrdersToNextMonth([stage.id])}
+                        disabled={stageOrders.length === 0}
+                      >
+                        للشهر التالي
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="delete-stage-btn"
+                      onClick={() => deleteAllInStage(stage.id)}
+                      disabled={stageOrders.length === 0}
+                    >
+                      حذف الكل
+                    </button>
+                  </div>
                 </div>
 
                 <div className="cards">

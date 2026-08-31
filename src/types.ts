@@ -39,6 +39,7 @@ export type HistoryAction =
   | 'delete_stage'
   | 'target'
   | 'reply'
+  | 'month_carry'
 
 export interface Order {
   id: string
@@ -65,6 +66,8 @@ export interface Order {
   replied: boolean
   /** Free-text notes about the order / customer. */
   notes: string
+  /** شهر اللوحة الميلادي YYYY-MM */
+  boardMonth: string
   createdAt: string
   updatedAt: string
 }
@@ -97,4 +100,18 @@ export function countsTowardFinance(stage: StageId): boolean {
 
 export function repliedFromInquiryStatus(status: InquiryStatus): boolean {
   return status === 'contacted' || status === 'documents'
+}
+
+/** مراحل يمكن ترحيلها للشهر التالي */
+export const CARRY_MONTH_STAGES: StageId[] = ['0', '04', '77']
+
+/** مراحل قابلة للتصدير إلى Excel */
+export const EXCEL_EXPORT_STAGES: StageId[] = ['118', '120']
+
+export function canCarryToNextMonth(stage: StageId): boolean {
+  return CARRY_MONTH_STAGES.includes(stage)
+}
+
+export function canExportToExcel(stage: StageId): boolean {
+  return EXCEL_EXPORT_STAGES.includes(stage)
 }

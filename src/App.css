@@ -742,6 +742,102 @@ input {
   color: var(--danger);
 }
 
+.month-bar {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 1.1rem 1.15rem 1.2rem;
+  box-shadow: var(--shadow);
+  animation: fadeUp 0.55s ease both;
+}
+
+.month-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.month-bar-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--green-900);
+  font-size: 1.15rem;
+}
+
+.month-bar-head p {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.month-year-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.month-year-switch strong {
+  min-width: 3.5rem;
+  text-align: center;
+  font-family: var(--font-display);
+  color: var(--green-900);
+  font-size: 1.1rem;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.month-tile {
+  display: grid;
+  gap: 0.2rem;
+  place-items: center;
+  padding: 0.65rem 0.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--sand);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.month-tile:hover {
+  transform: translateY(-1px);
+  border-color: var(--green-700);
+}
+
+.month-tile.active {
+  background: linear-gradient(145deg, rgba(52, 21, 125, 0.12), rgba(3, 162, 151, 0.14));
+  border-color: var(--green-900);
+  box-shadow: 0 0 0 2px rgba(52, 21, 125, 0.12);
+}
+
+.month-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.month-count {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--green-900);
+}
+
+.month-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.95rem;
+}
+
 .column-meta {
   display: flex;
   justify-content: space-between;
@@ -753,6 +849,39 @@ input {
   margin-bottom: 0.85rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px dashed var(--line);
+}
+
+.column-meta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.export-stage-btn,
+.carry-stage-btn {
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.export-stage-btn {
+  border: 1px solid rgba(3, 162, 151, 0.35);
+  background: rgba(3, 162, 151, 0.1);
+  color: #028078;
+}
+
+.carry-stage-btn {
+  border: 1px solid rgba(52, 21, 125, 0.28);
+  background: rgba(52, 21, 125, 0.08);
+  color: var(--green-900);
+}
+
+.export-stage-btn:disabled,
+.carry-stage-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .delete-stage-btn {
@@ -1846,6 +1975,10 @@ input {
 
   .btn-primary {
     width: 100%;
+  }
+
+  .month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .icon-grid,
