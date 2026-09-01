@@ -4,6 +4,59 @@ const STORAGE_KEY = 'riyadh-bank-sales-orders'
 const TARGET_KEY = 'riyadh-bank-monthly-target'
 const HISTORY_KEY = 'riyadh-bank-sales-history'
 const DELETED_KEY = 'riyadh-bank-deleted-ids'
+const MARGIN_RATES_KEY = 'riyadh-bank-margin-rates'
+
+export type MarginRates = {
+  installmentsConverted: string
+  installmentsNonConverted: string
+  fiftyFiftyConverted: string
+  fiftyFiftyNonConverted: string
+}
+
+export const DEFAULT_MARGIN_RATES: MarginRates = {
+  installmentsConverted: '4.89',
+  installmentsNonConverted: '5.39',
+  fiftyFiftyConverted: '5.99',
+  fiftyFiftyNonConverted: '6.49',
+}
+
+function normalizeMarginRate(raw: unknown, fallback: string): string {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return String(raw).trim() || fallback
+}
+
+export function loadMarginRates(): MarginRates {
+  try {
+    const raw = localStorage.getItem(MARGIN_RATES_KEY)
+    if (!raw) return { ...DEFAULT_MARGIN_RATES }
+    const parsed = JSON.parse(raw) as Partial<MarginRates>
+    return {
+      installmentsConverted: normalizeMarginRate(
+        parsed.installmentsConverted,
+        DEFAULT_MARGIN_RATES.installmentsConverted,
+      ),
+      installmentsNonConverted: normalizeMarginRate(
+        parsed.installmentsNonConverted,
+        DEFAULT_MARGIN_RATES.installmentsNonConverted,
+      ),
+      fiftyFiftyConverted: normalizeMarginRate(
+        parsed.fiftyFiftyConverted,
+        DEFAULT_MARGIN_RATES.fiftyFiftyConverted,
+      ),
+      fiftyFiftyNonConverted: normalizeMarginRate(
+        parsed.fiftyFiftyNonConverted,
+        DEFAULT_MARGIN_RATES.fiftyFiftyNonConverted,
+      ),
+    }
+  } catch {
+    return { ...DEFAULT_MARGIN_RATES }
+  }
+}
+
+export function saveMarginRates(rates: MarginRates): void {
+  localStorage.setItem(MARGIN_RATES_KEY, JSON.stringify(rates))
+}
 
 export function loadOrders(): Order[] {
   try {

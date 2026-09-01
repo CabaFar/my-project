@@ -1,19 +1,15 @@
 import { useMemo, useState } from 'react'
 import SalaryRacPolicy from './SalaryRacPolicy'
+import {
+  DEFAULT_MARGIN_RATES,
+  loadMarginRates,
+  saveMarginRates,
+  type MarginRates,
+} from './storage'
 
 type FinanceMode = 'installments' | 'fiftyfifty'
 type AmountMode = 'amount' | 'percent'
 type CustomerType = 'converted' | 'nonconverted'
-
-const INST_MARGIN = {
-  converted: '4.89',
-  nonconverted: '5.39',
-} as const
-
-const FF_MARGIN = {
-  converted: '5.99',
-  nonconverted: '6.49',
-} as const
 
 /** أرقام إنجليزية (لاتينية) مع فواصل آلاف — بدون رمز عملة */
 function formatMoney(value: number): string {
@@ -73,9 +69,19 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function cleanRate(raw: string, fallback: string): string {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return String(raw).trim() || fallback
+}
+
 export default function FinanceCalculator() {
   const [mode, setMode] = useState<FinanceMode>('installments')
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
+  const [ratesMsg, setRatesMsg] = useState<string | null>(null)
+
+  const [marginRates, setMarginRates] = useState<MarginRates>(() => loadMarginRates())
+  const [ratesDraft, setRatesDraft] = useState<MarginRates>(() => loadMarginRates())
 
   // Installments inputs (independent from 50-50)
   const [instPrice, setInstPrice] = useState('')
@@ -84,7 +90,9 @@ export default function FinanceCalculator() {
   const [finalRaw, setFinalRaw] = useState('')
   const [finalMode, setFinalMode] = useState<AmountMode>('amount')
   const [instCustomerType, setInstCustomerType] = useState<CustomerType>('converted')
-  const [instMargin, setInstMargin] = useState<string>(INST_MARGIN.converted)
+  const [instMargin, setInstMargin] = useState<string>(
+    () => loadMarginRates().installmentsConverted,
+  )
   const [years, setYears] = useState('5')
   const [months, setMonths] = useState('59')
   const [instInsurance, setInstInsurance] = useState('')
@@ -92,7 +100,9 @@ export default function FinanceCalculator() {
   // 50-50 inputs (independent from installments)
   const [ffPrice, setFfPrice] = useState('')
   const [ffCustomerType, setFfCustomerType] = useState<CustomerType>('converted')
-  const [ffMargin, setFfMargin] = useState<string>(FF_MARGIN.converted)
+  const [ffMargin, setFfMargin] = useState<string>(
+    () => loadMarginRates().fiftyFiftyConverted,
+  )
   const [ffInsurance, setFfInsurance] = useState('')
   const [ffYears, setFfYears] = useState<2 | 3 | 4>(2)
 
@@ -103,6 +113,15 @@ export default function FinanceCalculator() {
   const ffCarPrice = toNumber(ffPrice)
   const ffMarginPct = toNumber(ffMargin)
   const ffInsure = toNumber(ffInsurance)
+
+  const instPreset = {
+    converted: marginRates.installmentsConverted,
+    nonconverted: marginRates.installmentsNonConverted,
+  }
+  const ffPreset = {
+    converted: marginRates.fiftyFiftyConverted,
+    nonconverted: marginRates.fiftyFiftyNonConverted,
+  }
 
   const installments = useMemo(() => {
     const down = resolveAmount(price, downRaw, downMode)
@@ -163,12 +182,61 @@ export default function FinanceCalculator() {
 
   function applyInstCustomerType(type: CustomerType) {
     setInstCustomerType(type)
-    setInstMargin(INST_MARGIN[type])
+    setInstMargin(instPreset[type])
   }
 
   function applyFfCustomerType(type: CustomerType) {
     setFfCustomerType(type)
-    setFfMargin(FF_MARGIN[type])
+    setFfMargin(ffPreset[type])
+  }
+
+  function saveFixedRates() {
+    const next: MarginRates = {
+      installmentsConverted: cleanRate(
+        ratesDraft.installmentsConverted,
+        DEFAULT_MARGIN_RATES.installmentsConverted,
+      ),
+      installmentsNonConverted: cleanRate(
+        ratesDraft.installmentsNonConverted,
+        DEFAULT_MARGIN_RATES.installmentsNonConverted,
+      ),
+      fiftyFiftyConverted: cleanRate(
+        ratesDraft.fiftyFiftyConverted,
+        DEFAULT_MARGIN_RATES.fiftyFiftyConverted,
+      ),
+      fiftyFiftyNonConverted: cleanRate(
+        ratesDraft.fiftyFiftyNonConverted,
+        DEFAULT_MARGIN_RATES.fiftyFiftyNonConverted,
+      ),
+    }
+    saveMarginRates(next)
+    setMarginRates(next)
+    setRatesDraft(next)
+    setInstMargin(
+      instCustomerType === 'converted'
+        ? next.installmentsConverted
+        : next.installmentsNonConverted,
+    )
+    setFfMargin(
+      ffCustomerType === 'converted'
+        ? next.fiftyFiftyConverted
+        : next.fiftyFiftyNonConverted,
+    )
+    setRatesMsg('تم حفظ النسب الثابتة')
+    window.setTimeout(() => setRatesMsg(null), 2200)
+  }
+
+  function resetFixedRates() {
+    const next = { ...DEFAULT_MARGIN_RATES }
+    setRatesDraft(next)
+    saveMarginRates(next)
+    setMarginRates(next)
+    setInstCustomerType('converted')
+    setFfCustomerType('converted')
+    setInstMargin(next.installmentsConverted)
+    setFfMargin(next.fiftyFiftyConverted)
+    setRatesMsg('تمت إعادة النسب الافتراضية')
+    window.setTimeout(() => setRatesMsg(null), 2200)
   }
 
   function showCopyFeedback(ok: boolean) {
@@ -214,10 +282,98 @@ export default function FinanceCalculator() {
         <p className="eyebrow">أدوات المبيعات</p>
         <h2>حاسبة تمويل السيارات</h2>
         <p className="hero-sub">
-          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل. نسب الربح جاهزة
-          للمحوّل وغير المحوّل ويمكن تعديلها، والنسخ بدون رمز العملة.
+          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل. سجّل النسب الثابتة
+          بالأعلى وغيّرها في أي وقت، والنسخ بدون رمز العملة.
         </p>
       </div>
+
+      <section className="margin-rates-panel" aria-label="تسجيل النسب الثابتة">
+        <div className="margin-rates-head">
+          <div>
+            <h3>تسجيل النسب الثابتة</h3>
+            <p>يمكن تغييرها في أي وقت — تُحفظ على هذا الجهاز وتُستخدم مباشرة في الحاسبة</p>
+          </div>
+          <div className="margin-rates-actions">
+            <button type="button" className="btn-primary" onClick={saveFixedRates}>
+              حفظ النسب
+            </button>
+            <button type="button" className="btn-ghost" onClick={resetFixedRates}>
+              افتراضي
+            </button>
+          </div>
+        </div>
+        {ratesMsg && <p className="calc-copy-feedback">{ratesMsg}</p>}
+        <div className="margin-rates-grid">
+          <label>
+            أقساط — محوّل %
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              lang="en"
+              value={ratesDraft.installmentsConverted}
+              onChange={(e) =>
+                setRatesDraft((r) => ({
+                  ...r,
+                  installmentsConverted: e.target.value,
+                }))
+              }
+            />
+          </label>
+          <label>
+            أقساط — غير محوّل %
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              lang="en"
+              value={ratesDraft.installmentsNonConverted}
+              onChange={(e) =>
+                setRatesDraft((r) => ({
+                  ...r,
+                  installmentsNonConverted: e.target.value,
+                }))
+              }
+            />
+          </label>
+          <label>
+            50–50 — محوّل %
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              lang="en"
+              value={ratesDraft.fiftyFiftyConverted}
+              onChange={(e) =>
+                setRatesDraft((r) => ({
+                  ...r,
+                  fiftyFiftyConverted: e.target.value,
+                }))
+              }
+            />
+          </label>
+          <label>
+            50–50 — غير محوّل %
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              lang="en"
+              value={ratesDraft.fiftyFiftyNonConverted}
+              onChange={(e) =>
+                setRatesDraft((r) => ({
+                  ...r,
+                  fiftyFiftyNonConverted: e.target.value,
+                }))
+              }
+            />
+          </label>
+        </div>
+      </section>
 
       <div className="calc-mode-switch" role="tablist" aria-label="نوع التمويل">
         <button
@@ -329,14 +485,14 @@ export default function FinanceCalculator() {
                   className={instCustomerType === 'converted' ? 'active' : ''}
                   onClick={() => applyInstCustomerType('converted')}
                 >
-                  محوّل <span lang="en">4.89%</span>
+                  محوّل <span lang="en">{instPreset.converted}%</span>
                 </button>
                 <button
                   type="button"
                   className={instCustomerType === 'nonconverted' ? 'active' : ''}
                   onClick={() => applyInstCustomerType('nonconverted')}
                 >
-                  غير محوّل <span lang="en">5.39%</span>
+                  غير محوّل <span lang="en">{instPreset.nonconverted}%</span>
                 </button>
               </div>
             </fieldset>
@@ -353,10 +509,10 @@ export default function FinanceCalculator() {
                 onChange={(e) => {
                   setInstMargin(e.target.value)
                   const v = e.target.value.trim()
-                  if (v === INST_MARGIN.converted) setInstCustomerType('converted')
-                  else if (v === INST_MARGIN.nonconverted) setInstCustomerType('nonconverted')
+                  if (v === instPreset.converted) setInstCustomerType('converted')
+                  else if (v === instPreset.nonconverted) setInstCustomerType('nonconverted')
                 }}
-                placeholder="4.89"
+                placeholder={instPreset.converted}
               />
             </label>
 
@@ -519,14 +675,14 @@ export default function FinanceCalculator() {
                   className={ffCustomerType === 'converted' ? 'active' : ''}
                   onClick={() => applyFfCustomerType('converted')}
                 >
-                  محوّل <span lang="en">5.99%</span>
+                  محوّل <span lang="en">{ffPreset.converted}%</span>
                 </button>
                 <button
                   type="button"
                   className={ffCustomerType === 'nonconverted' ? 'active' : ''}
                   onClick={() => applyFfCustomerType('nonconverted')}
                 >
-                  غير محوّل <span lang="en">6.49%</span>
+                  غير محوّل <span lang="en">{ffPreset.nonconverted}%</span>
                 </button>
               </div>
             </fieldset>
@@ -543,10 +699,10 @@ export default function FinanceCalculator() {
                 onChange={(e) => {
                   setFfMargin(e.target.value)
                   const v = e.target.value.trim()
-                  if (v === FF_MARGIN.converted) setFfCustomerType('converted')
-                  else if (v === FF_MARGIN.nonconverted) setFfCustomerType('nonconverted')
+                  if (v === ffPreset.converted) setFfCustomerType('converted')
+                  else if (v === ffPreset.nonconverted) setFfCustomerType('nonconverted')
                 }}
-                placeholder="5.99"
+                placeholder={ffPreset.converted}
               />
             </label>
 
