@@ -3,8 +3,19 @@ import SalaryRacPolicy from './SalaryRacPolicy'
 
 type FinanceMode = 'installments' | 'fiftyfifty'
 type AmountMode = 'amount' | 'percent'
+type CustomerType = 'converted' | 'nonconverted'
 
-/** أرقام إنجليزية (لاتينية) مع فواصل آلاف */
+const INST_MARGIN = {
+  converted: '4.89',
+  nonconverted: '5.39',
+} as const
+
+const FF_MARGIN = {
+  converted: '5.99',
+  nonconverted: '6.49',
+} as const
+
+/** أرقام إنجليزية (لاتينية) مع فواصل آلاف — بدون رمز عملة */
 function formatMoney(value: number): string {
   if (!Number.isFinite(value)) return '—'
   return new Intl.NumberFormat('en-US', {
@@ -16,7 +27,7 @@ function formatMoney(value: number): string {
 
 function moneyLine(label: string, value: number, skipIfZero = false): string | null {
   if (skipIfZero && (!Number.isFinite(value) || value === 0)) return null
-  return `${label}: ${formatMoney(value)} ر.س`
+  return `${label}: ${formatMoney(value)}`
 }
 
 function toNumber(raw: string): number {
@@ -72,14 +83,16 @@ export default function FinanceCalculator() {
   const [downMode, setDownMode] = useState<AmountMode>('amount')
   const [finalRaw, setFinalRaw] = useState('')
   const [finalMode, setFinalMode] = useState<AmountMode>('amount')
-  const [instMargin, setInstMargin] = useState('')
+  const [instCustomerType, setInstCustomerType] = useState<CustomerType>('converted')
+  const [instMargin, setInstMargin] = useState<string>(INST_MARGIN.converted)
   const [years, setYears] = useState('5')
   const [months, setMonths] = useState('59')
   const [instInsurance, setInstInsurance] = useState('')
 
   // 50-50 inputs (independent from installments)
   const [ffPrice, setFfPrice] = useState('')
-  const [ffMargin, setFfMargin] = useState('')
+  const [ffCustomerType, setFfCustomerType] = useState<CustomerType>('converted')
+  const [ffMargin, setFfMargin] = useState<string>(FF_MARGIN.converted)
   const [ffInsurance, setFfInsurance] = useState('')
   const [ffYears, setFfYears] = useState<2 | 3 | 4>(2)
 
@@ -148,6 +161,16 @@ export default function FinanceCalculator() {
     setMonths(String(Math.max(1, suggested || y * 12)))
   }
 
+  function applyInstCustomerType(type: CustomerType) {
+    setInstCustomerType(type)
+    setInstMargin(INST_MARGIN[type])
+  }
+
+  function applyFfCustomerType(type: CustomerType) {
+    setFfCustomerType(type)
+    setFfMargin(FF_MARGIN[type])
+  }
+
   function showCopyFeedback(ok: boolean) {
     setCopyMsg(ok ? 'تم نسخ نتيجة الحساب' : 'تعذر النسخ — حاول مرة أخرى')
     window.setTimeout(() => setCopyMsg(null), 2200)
@@ -160,22 +183,13 @@ export default function FinanceCalculator() {
         : `${installments.years} سنوات (${installments.months} شهر)`
 
     const lines = [
-      'عرض تمويل سيارة — بنك الرياض',
-      'نظام أقساط شهرية',
-      '────────────────────',
-      moneyLine('سعر السيارة كاش', installments.carPrice),
-      moneyLine('مبلغ التمويل', installments.financed),
+      moneyLine('الدفعة الأولى شامل الرسوم الإدارية', installments.firstPayment),
       `مدة التمويل: ${duration}`,
-      moneyLine('الدفعة الأولى', installments.down, true),
-      moneyLine('الرسوم الإدارية (شامل الضريبة)', installments.fees.total),
-      moneyLine('الدفعة الأولى شامل الرسوم', installments.firstPayment),
-      moneyLine('الدفعة الأخيرة', installments.last, true),
       moneyLine('القسط الشهري', installments.monthly),
+      moneyLine('الدفعة الأخيرة', installments.last),
       moneyLine('الإجمالي', installments.total),
-      moneyLine('إجمالي التأمين', installments.insurance),
-      moneyLine('إجمالي الربح', installments.profit),
-      '────────────────────',
-      'ملاحظة: الرسوم الإدارية = 0.5% من مبلغ التمويل + ضريبة 15%.',
+      moneyLine('الربح', installments.profit),
+      moneyLine('التأمين', installments.insurance),
     ].filter(Boolean) as string[]
 
     showCopyFeedback(await copyText(lines.join('\n')))
@@ -183,21 +197,12 @@ export default function FinanceCalculator() {
 
   async function copyFiftyFiftyResult() {
     const lines = [
-      'عرض تمويل سيارة — بنك الرياض',
-      'نظام دفعتين 50–50',
-      '────────────────────',
-      moneyLine('سعر السيارة كاش', fiftyFifty.carPrice),
-      moneyLine('مبلغ التمويل (النصف المؤجل)', fiftyFifty.half),
+      moneyLine('الدفعة الأولى شامل الرسوم الإدارية', fiftyFifty.firstPayment),
       `مدة التمويل: ${fiftyFifty.years} سنوات`,
-      moneyLine('الدفعة الأولى (نصف السعر)', fiftyFifty.half),
-      moneyLine('الرسوم الإدارية (شامل الضريبة)', fiftyFifty.fees.total),
-      moneyLine('الدفعة الأولى شامل الرسوم والتأمين', fiftyFifty.firstPayment),
       moneyLine('الدفعة الأخيرة', fiftyFifty.finalPayment),
       moneyLine('الإجمالي', fiftyFifty.total),
-      moneyLine('إجمالي التأمين', fiftyFifty.insurance),
-      moneyLine('إجمالي الربح', fiftyFifty.profit),
-      '────────────────────',
-      'ملاحظة: بدون أقساط شهرية — دفعتان فقط.',
+      moneyLine('الربح', fiftyFifty.profit),
+      moneyLine('التأمين', fiftyFifty.insurance),
     ].filter(Boolean) as string[]
 
     showCopyFeedback(await copyText(lines.join('\n')))
@@ -209,8 +214,8 @@ export default function FinanceCalculator() {
         <p className="eyebrow">أدوات المبيعات</p>
         <h2>حاسبة تمويل السيارات</h2>
         <p className="hero-sub">
-          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل. كل نظام له مدخلاته
-          المستقلة. الأرقام بالإنجليزية، ويمكنك نسخ نتيجة الحساب كاملة.
+          احسب القسط أو نظام الدفعتين قبل تقديم العرض للعميل. نسب الربح جاهزة
+          للمحوّل وغير المحوّل ويمكن تعديلها، والنسخ بدون رمز العملة.
         </p>
       </div>
 
@@ -316,8 +321,28 @@ export default function FinanceCalculator() {
               </div>
             </div>
 
+            <fieldset className="reply-picker">
+              <legend>نوع العميل — نسبة الربح</legend>
+              <div className="calc-toggle wide" role="group" aria-label="نوع العميل">
+                <button
+                  type="button"
+                  className={instCustomerType === 'converted' ? 'active' : ''}
+                  onClick={() => applyInstCustomerType('converted')}
+                >
+                  محوّل <span lang="en">4.89%</span>
+                </button>
+                <button
+                  type="button"
+                  className={instCustomerType === 'nonconverted' ? 'active' : ''}
+                  onClick={() => applyInstCustomerType('nonconverted')}
+                >
+                  غير محوّل <span lang="en">5.39%</span>
+                </button>
+              </div>
+            </fieldset>
+
             <label>
-              هامش الربح (%)
+              هامش الربح (%) — ثابت ويمكن تعديله
               <input
                 type="number"
                 min="0"
@@ -325,8 +350,13 @@ export default function FinanceCalculator() {
                 inputMode="decimal"
                 lang="en"
                 value={instMargin}
-                onChange={(e) => setInstMargin(e.target.value)}
-                placeholder="مثال: 3.5"
+                onChange={(e) => {
+                  setInstMargin(e.target.value)
+                  const v = e.target.value.trim()
+                  if (v === INST_MARGIN.converted) setInstCustomerType('converted')
+                  else if (v === INST_MARGIN.nonconverted) setInstCustomerType('nonconverted')
+                }}
+                placeholder="4.89"
               />
             </label>
 
@@ -418,16 +448,14 @@ export default function FinanceCalculator() {
               <span>إجمالي الرسوم</span>
               <strong lang="en">{formatMoney(installments.fees.total)} ر.س</strong>
             </div>
-            <div className="calc-result-row">
+            <div className="calc-result-row highlight">
               <span>الدفعة الأولى (شامل الرسوم)</span>
               <strong lang="en">{formatMoney(installments.firstPayment)} ر.س</strong>
             </div>
-            {installments.last > 0 && (
-              <div className="calc-result-row">
-                <span>الدفعة الأخيرة</span>
-                <strong lang="en">{formatMoney(installments.last)} ر.س</strong>
-              </div>
-            )}
+            <div className="calc-result-row">
+              <span>الدفعة الأخيرة</span>
+              <strong lang="en">{formatMoney(installments.last)} ر.س</strong>
+            </div>
             <div className="calc-result-row highlight">
               <span>القسط الشهري</span>
               <strong lang="en">{formatMoney(installments.monthly)} ر.س</strong>
@@ -445,8 +473,8 @@ export default function FinanceCalculator() {
               <strong lang="en">{formatMoney(installments.profit)} ر.س</strong>
             </div>
             <p className="calc-note">
-              الرسوم الإدارية = 0.5% من مبلغ التمويل (وليس سعر السيارة)، ثم تُضاف
-              ضريبة 15% على الرسوم إلى الدفعة الأولى.
+              عند النسخ: بدون رمز العملة وبدون مبلغ التمويل — فقط الدفعة الأولى
+              شامل الرسوم، المدة، القسط، الدفعة الأخيرة، الإجمالي، الربح، والتأمين.
             </p>
           </aside>
         </div>
@@ -483,8 +511,28 @@ export default function FinanceCalculator() {
               </div>
             </label>
 
+            <fieldset className="reply-picker">
+              <legend>نوع العميل — نسبة الربح</legend>
+              <div className="calc-toggle wide" role="group" aria-label="نوع العميل">
+                <button
+                  type="button"
+                  className={ffCustomerType === 'converted' ? 'active' : ''}
+                  onClick={() => applyFfCustomerType('converted')}
+                >
+                  محوّل <span lang="en">5.99%</span>
+                </button>
+                <button
+                  type="button"
+                  className={ffCustomerType === 'nonconverted' ? 'active' : ''}
+                  onClick={() => applyFfCustomerType('nonconverted')}
+                >
+                  غير محوّل <span lang="en">6.49%</span>
+                </button>
+              </div>
+            </fieldset>
+
             <label>
-              هامش الربح (%)
+              هامش الربح (%) — ثابت ويمكن تعديله
               <input
                 type="number"
                 min="0"
@@ -492,8 +540,13 @@ export default function FinanceCalculator() {
                 inputMode="decimal"
                 lang="en"
                 value={ffMargin}
-                onChange={(e) => setFfMargin(e.target.value)}
-                placeholder="مثال: 3.5"
+                onChange={(e) => {
+                  setFfMargin(e.target.value)
+                  const v = e.target.value.trim()
+                  if (v === FF_MARGIN.converted) setFfCustomerType('converted')
+                  else if (v === FF_MARGIN.nonconverted) setFfCustomerType('nonconverted')
+                }}
+                placeholder="5.99"
               />
             </label>
 
@@ -543,7 +596,7 @@ export default function FinanceCalculator() {
               <strong lang="en">{formatMoney(fiftyFifty.fees.total)} ر.س</strong>
             </div>
             <div className="calc-result-row highlight">
-              <span>الدفعة الأولى</span>
+              <span>الدفعة الأولى شامل الرسوم</span>
               <strong lang="en">{formatMoney(fiftyFifty.firstPayment)} ر.س</strong>
             </div>
             <p className="calc-note tiny">
@@ -567,7 +620,10 @@ export default function FinanceCalculator() {
               <span>إجمالي الربح</span>
               <strong lang="en">{formatMoney(fiftyFifty.profit)} ر.س</strong>
             </div>
-            <p className="calc-note">بدون أقساط شهرية — دفعتان فقط.</p>
+            <p className="calc-note">
+              عند النسخ: بدون رمز العملة وبدون مبلغ التمويل — الدفعة الأولى، المدة،
+              الدفعة الأخيرة، الإجمالي، الربح، والتأمين.
+            </p>
           </aside>
         </div>
       )}
