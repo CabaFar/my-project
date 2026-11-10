@@ -23,7 +23,7 @@ import {
   onSupabaseConfigChange,
 } from './supabaseConfig'
 import { pullSharedSupabaseConfig } from './supabaseSharedConfig'
-import SupabaseSetup from './SupabaseSetup'
+import SupabaseSetup, { SupabaseBackupPanel } from './SupabaseSetup'
 import type {
   DateFilter,
   HistoryEntry,
@@ -1012,6 +1012,13 @@ export default function App() {
           <FinanceCalculator />
         ) : (
           <>
+        <SupabaseBackupPanel
+          onConfigured={() => {
+            setSupabaseReady(true)
+            setToast('تم تفعيل نسخ Supabase — الحفظ والمزامنة التلقائية بين الأجهزة')
+            void runSync({ silent: false })
+          }}
+        />
         <section className="month-bar" aria-label="أشهر السنة الميلادية">
           <div className="month-bar-head">
             <div>

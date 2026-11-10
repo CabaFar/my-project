@@ -2083,6 +2083,83 @@ input {
   width: min(640px, 100%);
 }
 
+.supabase-panel {
+  background: linear-gradient(135deg, rgba(52, 21, 125, 0.06), rgba(3, 162, 151, 0.08));
+  border: 1px solid rgba(52, 21, 125, 0.14);
+  border-radius: 18px;
+  padding: 1.1rem 1.2rem 1.25rem;
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.supabase-panel-ready {
+  background: linear-gradient(135deg, rgba(3, 162, 151, 0.1), rgba(52, 21, 125, 0.05));
+}
+
+.supabase-panel-head,
+.supabase-panel-ready-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.supabase-panel h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--green-900);
+}
+
+.supabase-panel p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.supabase-panel-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.supabase-panel-hint span {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(52, 21, 125, 0.1);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.supabase-panel-form {
+  margin-top: 0.15rem;
+}
+
+.supabase-url-chip {
+  display: inline-block;
+  margin-top: 0.45rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supabase-setup .supabase-panel {
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
 .supabase-lead {
   margin: 0.35rem 0 0;
   color: var(--ink-soft);

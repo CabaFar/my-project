@@ -11,48 +11,52 @@ import { resetSupabaseClient } from './supabaseClient'
 import { publishSharedSupabaseConfig } from './supabaseSharedConfig'
 import { SCHEMA_SQL } from './supabaseSchemaText'
 
-type Props = {
-  open: boolean
-  onClose: () => void
+type PanelProps = {
   onConfigured: () => void
 }
 
-export default function SupabaseSetup({ open, onClose, onConfigured }: Props) {
+/** لوحة ظاهرة داخل الصفحة للصق Project URL و anon key */
+export function SupabaseBackupPanel({ onConfigured }: PanelProps) {
   const existing = getSupabaseConfig()
   const [url, setUrl] = useState(existing?.url || '')
   const [anonKey, setAnonKey] = useState(existing?.anonKey || '')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [configured, setConfigured] = useState(isSupabaseConfigured())
+  const [showSql, setShowSql] = useState(false)
+  const [editing, setEditing] = useState(!isSupabaseConfigured())
 
   useEffect(() => {
     void loadRuntimeSupabaseConfig().then(() => {
-      setConfigured(isSupabaseConfigured())
+      const ready = isSupabaseConfigured()
+      setConfigured(ready)
+      setEditing(!ready)
       const cfg = getSupabaseConfig()
       if (cfg) {
         setUrl(cfg.url)
         setAnonKey(cfg.anonKey)
       }
     })
-    return onSupabaseConfigChange(() => setConfigured(isSupabaseConfigured()))
+    return onSupabaseConfigChange(() => {
+      const ready = isSupabaseConfigured()
+      setConfigured(ready)
+      if (ready) setEditing(false)
+    })
   }, [])
-
-  if (!open) return null
 
   async function onSave(e: FormEvent) {
     e.preventDefault()
     setError(null)
     try {
-      const cfg = { url, anonKey }
+      const cfg = { url: url.trim(), anonKey: anonKey.trim() }
       saveSupabaseConfig(cfg)
       resetSupabaseClient()
-      // انشر الإعداد لبقية الأجهزة تلقائيًا
       void publishSharedSupabaseConfig(cfg)
       setConfigured(true)
+      setEditing(false)
       onConfigured()
-      onClose()
     } catch {
-      setError('تأكد من رابط المشروع ومفتاح anon ثم أعد المحاولة')
+      setError('تأكد من لصق Project URL و anon key بشكل صحيح ثم أعد المحاولة')
     }
   }
 
@@ -60,6 +64,7 @@ export default function SupabaseSetup({ open, onClose, onConfigured }: Props) {
     clearStoredSupabaseConfig()
     resetSupabaseClient()
     setConfigured(false)
+    setEditing(true)
     setUrl('')
     setAnonKey('')
   }
@@ -70,9 +75,125 @@ export default function SupabaseSetup({ open, onClose, onConfigured }: Props) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      setError('تعذر النسخ — انسخ النص يدويًا من المربع')
+      setError('تعذر النسخ — افتح مربع SQL وانسخ يدويًا')
+      setShowSql(true)
     }
   }
+
+  if (configured && !editing) {
+    return (
+      <section className="supabase-panel supabase-panel-ready" aria-label="نسخ احتياطي Supabase">
+        <div className="supabase-panel-ready-row">
+          <div>
+            <h3>نسخ احتياطي Supabase مفعّل</h3>
+            <p>أي تغيير يُحفظ تلقائيًا ويصل لبقية الأجهزة فورًا</p>
+            <code className="supabase-url-chip" dir="ltr">
+              {url || getSupabaseConfig()?.url || ''}
+            </code>
+          </div>
+          <button type="button" className="btn-ghost" onClick={() => setEditing(true)}>
+            تعديل المفاتيح
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="supabase-panel" aria-label="تفعيل نسخ احتياطي Supabase">
+      <div className="supabase-panel-head">
+        <div>
+          <h3>تفعيل النسخ الاحتياطي في Supabase</h3>
+          <p>
+            الصق هنا <strong>Project URL</strong> و <strong>anon key</strong> ثم اضغط تفعيل —
+            بعدها أي تغيير يُحفظ تلقائيًا على كل الأجهزة
+          </p>
+        </div>
+        <a
+          className="btn-ghost"
+          href="https://supabase.com/dashboard"
+          target="_blank"
+          rel="noreferrer"
+        >
+          فتح Supabase
+        </a>
+      </div>
+
+      <div className="supabase-panel-hint">
+        <span>1) أنشئ مشروعًا مجانيًا</span>
+        <span>2) شغّل أمر SQL مرة واحدة</span>
+        <span>3) الصق المفتاحين بالأسفل وفعّل</span>
+      </div>
+
+      <div className="supabase-sql-actions">
+        <button type="button" className="btn-ghost" onClick={() => void copySql()}>
+          {copied ? 'تم نسخ أمر SQL' : 'نسخ أمر SQL Editor'}
+        </button>
+        <button type="button" className="btn-ghost" onClick={() => setShowSql((v) => !v)}>
+          {showSql ? 'إخفاء الأمر' : 'عرض أمر SQL'}
+        </button>
+      </div>
+
+      {showSql && (
+        <textarea className="supabase-sql" readOnly value={SCHEMA_SQL} dir="ltr" rows={10} />
+      )}
+
+      <form className="supabase-form supabase-panel-form" onSubmit={onSave}>
+        <label>
+          الصق Project URL هنا
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://xxxx.supabase.co"
+            dir="ltr"
+            autoComplete="off"
+            spellCheck={false}
+            required
+          />
+        </label>
+        <label>
+          الصق anon public key هنا
+          <textarea
+            value={anonKey}
+            onChange={(e) => setAnonKey(e.target.value)}
+            placeholder="eyJhbGciOi..."
+            dir="ltr"
+            rows={3}
+            autoComplete="off"
+            spellCheck={false}
+            required
+          />
+        </label>
+        {error && <p className="auth-error">{error}</p>}
+        <div className="supabase-form-actions">
+          <button type="submit" className="btn-primary">
+            تفعيل النسخ الاحتياطي
+          </button>
+          {configured && (
+            <button type="button" className="btn-ghost" onClick={onClear}>
+              مسح الإعداد
+            </button>
+          )}
+          {configured && (
+            <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>
+              إلغاء
+            </button>
+          )}
+        </div>
+      </form>
+    </section>
+  )
+}
+
+type ModalProps = {
+  open: boolean
+  onClose: () => void
+  onConfigured: () => void
+}
+
+/** نافذة من زر الشريط العلوي — نفس حقول اللصق */
+export default function SupabaseSetup({ open, onClose, onConfigured }: ModalProps) {
+  if (!open) return null
 
   return (
     <div
@@ -87,76 +208,19 @@ export default function SupabaseSetup({ open, onClose, onConfigured }: Props) {
           <div>
             <h2 id="supabase-setup-title">نسخ احتياطي Supabase</h2>
             <p className="supabase-lead">
-              حفظ تلقائي على السحابة ومزامنة فورية بين كل الأجهزة عند أي تغيير
+              الصق Project URL و anon key ثم فعّل الحفظ التلقائي بين الأجهزة
             </p>
           </div>
           <button type="button" className="close-btn" onClick={onClose}>
             إغلاق
           </button>
         </header>
-
-        <div className="supabase-setup-body">
-          <ol className="supabase-steps">
-            <li>
-              أنشئ مشروعًا مجانيًا من{' '}
-              <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">
-                supabase.com
-              </a>
-            </li>
-            <li>
-              من SQL Editor الصق الأمر التالي واضغط Run
-              <div className="supabase-sql-actions">
-                <button type="button" className="btn-ghost" onClick={() => void copySql()}>
-                  {copied ? 'تم النسخ' : 'نسخ أمر SQL'}
-                </button>
-              </div>
-              <textarea className="supabase-sql" readOnly value={SCHEMA_SQL} dir="ltr" rows={8} />
-            </li>
-            <li>
-              من Project Settings → API انسخ Project URL و anon public key وألصقهما هنا
-            </li>
-          </ol>
-
-          <form className="supabase-form" onSubmit={onSave}>
-            <label>
-              Project URL
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://xxxx.supabase.co"
-                dir="ltr"
-                required
-              />
-            </label>
-            <label>
-              anon public key
-              <textarea
-                value={anonKey}
-                onChange={(e) => setAnonKey(e.target.value)}
-                placeholder="eyJhbGciOi..."
-                dir="ltr"
-                rows={3}
-                required
-              />
-            </label>
-            {error && <p className="auth-error">{error}</p>}
-            <div className="supabase-form-actions">
-              <button type="submit" className="btn-primary">
-                {configured ? 'تحديث الإعداد والحفظ' : 'تفعيل النسخ الاحتياطي'}
-              </button>
-              {configured && (
-                <button type="button" className="btn-ghost" onClick={onClear}>
-                  إيقاف الإعداد المحلي
-                </button>
-              )}
-            </div>
-          </form>
-
-          <p className="supabase-note">
-            بعد التفعيل: أي إضافة أو تعديل أو حذف يُحفظ تلقائيًا في Supabase ويظهر فورًا على بقية
-            الأجهزة. المزامنة الحالية تبقى تعمل كنسخة احتياطية ثانية.
-          </p>
-        </div>
+        <SupabaseBackupPanel
+          onConfigured={() => {
+            onConfigured()
+            onClose()
+          }}
+        />
       </div>
     </div>
   )
