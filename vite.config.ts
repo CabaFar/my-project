@@ -4,7 +4,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig(({ command, mode }) => {
   const forCapacitor = mode === 'capacitor' || process.env.CAPACITOR === '1'
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+  const supabaseAnonKey =
+    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
+
   return {
+    define: {
+      __RIYADH_SUPABASE_URL__: JSON.stringify(supabaseUrl),
+      __RIYADH_SUPABASE_ANON_KEY__: JSON.stringify(supabaseAnonKey),
+    },
     plugins: [
       react(),
       VitePWA({
@@ -16,9 +24,30 @@ export default defineConfig(({ command, mode }) => {
             {
               urlPattern: ({ url }) =>
                 url.hostname.includes('extendsclass.com') ||
-                url.hostname.includes('githubusercontent.com'),
+                url.hostname.includes('githubusercontent.com') ||
+                url.hostname.includes('supabase.co'),
               handler: 'NetworkOnly',
               method: 'GET',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'POST',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'PUT',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'PATCH',
+            },
+            {
+              urlPattern: ({ url }) => url.hostname.includes('supabase.co'),
+              handler: 'NetworkOnly',
+              method: 'DELETE',
             },
           ],
         },

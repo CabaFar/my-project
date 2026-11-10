@@ -11,14 +11,19 @@ import {
   saveMonthlyTarget,
   saveOrders,
 } from './storage'
+import { isStoreEmpty, mergeStores, revisionFromStore, type CloudStore } from './cloud'
 import {
-  isStoreEmpty,
-  loadCloudStore,
-  mergeStores,
-  revisionFromStore,
-  syncWithCloud,
-  type CloudStore,
-} from './cloud'
+  loadRemoteStore,
+  subscribeRemoteStore,
+  syncRemoteStore,
+} from './remoteSync'
+import {
+  isSupabaseConfigured,
+  loadRuntimeSupabaseConfig,
+  onSupabaseConfigChange,
+} from './supabaseConfig'
+import { pullSharedSupabaseConfig } from './supabaseSharedConfig'
+import SupabaseSetup, { SupabaseBackupPanel } from './SupabaseSetup'
 import type {
   DateFilter,
   HistoryEntry,
@@ -273,6 +278,8 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonthKey())
   const [installEvent, setInstallEvent] = useState<{ prompt: () => Promise<void> } | null>(null)
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+  const [supabaseSetupOpen, setSupabaseSetupOpen] = useState(false)
+  const [supabaseReady, setSupabaseReady] = useState(() => isSupabaseConfigured())
   const pipelineRef = useRef<HTMLElement | null>(null)
   const skipNextCloudSave = useRef(true)
   const cloudReady = useRef(false)
@@ -338,7 +345,7 @@ export default function App() {
     setSyncState('syncing')
     const local = currentLocalStore()
     if (options?.pullOnly) {
-      const cloud = await loadCloudStore()
+      const cloud = await loadRemoteStore()
       if (!cloud) {
         setSyncState(isStoreEmpty(local) ? 'idle' : 'error')
         if (!options.silent) setToast('تعذر الاتصال بالسحابة')
@@ -351,7 +358,7 @@ export default function App() {
         setSyncState('ok')
         return true
       }
-      const result = await syncWithCloud(merged)
+      const result = await syncRemoteStore(merged)
       if (result.ok) applyStore(result.store, { skipSave: true })
       setSyncState(result.ok ? 'ok' : 'error')
       return result.ok
@@ -359,7 +366,7 @@ export default function App() {
 
     // جهاز جديد فاضي بدون بيانات محلية: اسحب فقط ولا تكتب فوق السحابة
     if (isStoreEmpty(local)) {
-      const cloud = await loadCloudStore()
+      const cloud = await loadRemoteStore()
       if (cloud) {
         applyStore(mergeStores(local, cloud), { skipSave: true })
         setSyncState('ok')
@@ -369,7 +376,7 @@ export default function App() {
       return false
     }
 
-    const result = await syncWithCloud(local)
+    const result = await syncRemoteStore(local)
     if (result.ok) {
       // Apply merged cloud result so other-device changes appear here too
       applyStore(result.store, { skipSave: true })
@@ -385,7 +392,14 @@ export default function App() {
     let cancelled = false
     async function hydrateFromCloud() {
       setSyncState('syncing')
-      const cloud = await loadCloudStore()
+      await loadRuntimeSupabaseConfig()
+      if (cancelled) return
+      if (!isSupabaseConfigured()) {
+        await pullSharedSupabaseConfig()
+      }
+      if (cancelled) return
+      setSupabaseReady(isSupabaseConfigured())
+      const cloud = await loadRemoteStore()
       if (cancelled) return
       const localRaw = {
         monthlyTarget: loadMonthlyTarget(),
@@ -408,7 +422,7 @@ export default function App() {
             setToast('تم تحميل بيانات السحابة على هذا الجهاز')
           }
         } else {
-          const result = await syncWithCloud(merged)
+          const result = await syncRemoteStore(merged)
           if (cancelled) return
           if (result.ok) applyStore(result.store, { skipSave: true })
           setSyncState(result.ok ? 'ok' : 'error')
@@ -416,13 +430,15 @@ export default function App() {
             hydrateToastShown.current = true
             setToast(
               result.ok
-                ? 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
+                ? isSupabaseConfigured()
+                  ? 'تم التحميل — نسخ Supabase الاحتياطي والمزامنة التلقائية مفعّلان'
+                  : 'تم تحميل أحدث البيانات — الحفظ التلقائي مفعّل'
                 : 'تم التحميل، لكن الحفظ السحابي متأخر — سيُعاد تلقائياً',
             )
           }
         }
       } else if (!isStoreEmpty(localForMerge)) {
-        const result = await syncWithCloud(localForMerge)
+        const result = await syncRemoteStore(localForMerge)
         if (cancelled) return
         if (result.ok) applyStore(result.store, { skipSave: true })
         setSyncState(result.ok ? 'ok' : 'error')
@@ -486,6 +502,25 @@ export default function App() {
       window.removeEventListener('focus', tick)
       window.removeEventListener('online', onOnline)
     }
+  }, [])
+
+  // Instant sync when another device writes (Supabase Realtime)
+  useEffect(() => {
+    if (!supabaseReady) return
+    const unsub = subscribeRemoteStore((remote) => {
+      if (!cloudReady.current) return
+      const merged = mergeStores(currentLocalStore(), remote)
+      applyStore(merged, { skipSave: true })
+      setSyncState('ok')
+    })
+    return unsub
+  }, [supabaseReady])
+
+  useEffect(() => {
+    return onSupabaseConfigChange(() => {
+      setSupabaseReady(isSupabaseConfigured())
+      if (cloudReady.current) void runSync({ silent: true })
+    })
   }, [])
 
   useEffect(() => {
@@ -915,18 +950,32 @@ export default function App() {
           </div>
           <span
             className={`sync-badge sync-${syncState}`}
-            title="حالة المزامنة السحابية"
+            title={
+              supabaseReady
+                ? 'نسخ احتياطي Supabase + مزامنة فورية بين الأجهزة'
+                : 'حالة المزامنة السحابية'
+            }
           >
             {syncState === 'syncing'
               ? 'جاري الحفظ...'
               : syncState === 'ok'
-                ? 'محفوظ على كل الأجهزة'
+                ? supabaseReady
+                  ? 'Supabase — محفوظ على كل الأجهزة'
+                  : 'محفوظ على كل الأجهزة'
                 : syncState === 'error'
                   ? 'سيُعاد الحفظ تلقائياً'
                   : 'جاهز'}
           </span>
           <button type="button" className="btn-ghost" onClick={() => void syncNow()}>
             مزامنة الآن
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setSupabaseSetupOpen(true)}
+            title="إعداد النسخ الاحتياطي في Supabase"
+          >
+            {supabaseReady ? 'إعداد Supabase' : 'تفعيل نسخ Supabase'}
           </button>
           {installEvent && (
             <button
@@ -963,6 +1012,13 @@ export default function App() {
           <FinanceCalculator />
         ) : (
           <>
+        <SupabaseBackupPanel
+          onConfigured={() => {
+            setSupabaseReady(true)
+            setToast('تم تفعيل نسخ Supabase — الحفظ والمزامنة التلقائية بين الأجهزة')
+            void runSync({ silent: false })
+          }}
+        />
         <section className="month-bar" aria-label="أشهر السنة الميلادية">
           <div className="month-bar-head">
             <div>
@@ -1678,6 +1734,16 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <SupabaseSetup
+        open={supabaseSetupOpen}
+        onClose={() => setSupabaseSetupOpen(false)}
+        onConfigured={() => {
+          setSupabaseReady(true)
+          setToast('تم تفعيل نسخ Supabase — الحفظ والمزامنة التلقائية بين الأجهزة')
+          void runSync({ silent: false })
+        }}
+      />
 
       {toast && (
         <div className="toast" role="status">
