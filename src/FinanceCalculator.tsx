@@ -11,6 +11,9 @@ type FinanceMode = 'installments' | 'fiftyfifty'
 type AmountMode = 'amount' | 'percent'
 type CustomerType = 'converted' | 'nonconverted'
 
+const LAST_PAYMENT_LABEL =
+  'الدفعة الأخيرة (قابلة للجدولة حسب الراتب والالتزامات وقتها)'
+
 /** أرقام إنجليزية (لاتينية) مع فواصل آلاف — بدون رمز عملة */
 function formatMoney(value: number): string {
   if (!Number.isFinite(value)) return '—'
@@ -254,7 +257,7 @@ export default function FinanceCalculator() {
       moneyLine('الدفعة الأولى شامل الرسوم الإدارية', installments.firstPayment),
       `مدة التمويل: ${duration}`,
       moneyLine('القسط الشهري', installments.monthly),
-      moneyLine('الدفعة الأخيرة', installments.last),
+      moneyLine(LAST_PAYMENT_LABEL, installments.last),
       moneyLine('الإجمالي', installments.total),
       moneyLine('الربح', installments.profit),
       moneyLine('التأمين', installments.insurance),
@@ -267,7 +270,7 @@ export default function FinanceCalculator() {
     const lines = [
       moneyLine('الدفعة الأولى شامل الرسوم الإدارية', fiftyFifty.firstPayment),
       `مدة التمويل: ${fiftyFifty.years} سنوات`,
-      moneyLine('الدفعة الأخيرة', fiftyFifty.finalPayment),
+      moneyLine(LAST_PAYMENT_LABEL, fiftyFifty.finalPayment),
       moneyLine('الإجمالي', fiftyFifty.total),
       moneyLine('الربح', fiftyFifty.profit),
       moneyLine('التأمين', fiftyFifty.insurance),
@@ -447,7 +450,7 @@ export default function FinanceCalculator() {
 
             <div className="calc-split">
               <label>
-                الدفعة الأخيرة
+                {LAST_PAYMENT_LABEL}
                 <input
                   type="number"
                   min="0"
@@ -609,7 +612,7 @@ export default function FinanceCalculator() {
               <strong lang="en">{formatMoney(installments.firstPayment)} ر.س</strong>
             </div>
             <div className="calc-result-row">
-              <span>الدفعة الأخيرة</span>
+              <span>{LAST_PAYMENT_LABEL}</span>
               <strong lang="en">{formatMoney(installments.last)} ر.س</strong>
             </div>
             <div className="calc-result-row highlight">
@@ -760,7 +763,7 @@ export default function FinanceCalculator() {
               التأمين
             </p>
             <div className="calc-result-row highlight">
-              <span>الدفعة الأخيرة</span>
+              <span>{LAST_PAYMENT_LABEL}</span>
               <strong lang="en">{formatMoney(fiftyFifty.finalPayment)} ر.س</strong>
             </div>
             <p className="calc-note tiny">نصف السعر + الربح ({fiftyFifty.years} سنوات)</p>
